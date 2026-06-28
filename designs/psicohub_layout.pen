@@ -1,0 +1,614 @@
+{
+  "type": "document",
+  "version": "1.0",
+  "name": "PsicoHub Layout",
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Dashboard",
+      "width": 1440,
+      "height": 900,
+      "elements": [
+        {
+          "id": "sidebar-1",
+          "type": "container",
+          "name": "Sidebar Lateral",
+          "x": 0,
+          "y": 0,
+          "width": 260,
+          "height": 900,
+          "background": "#0f172a",
+          "children": [
+            { "id": "logo-1", "type": "text", "value": "PsicoHub", "color": "#ffffff", "fontSize": 20, "x": 20, "y": 30 },
+            { "id": "nav-dash-1", "type": "menu-item", "value": "🏠 Dashboard", "color": "#10b981", "x": 20, "y": 100 },
+            { "id": "nav-pacientes-1", "type": "menu-item", "value": "👤 Pacientes", "color": "#94a3b8", "x": 20, "y": 150 },
+            { "id": "nav-agenda-1", "type": "menu-item", "value": "📅 Agenda", "color": "#94a3b8", "x": 20, "y": 200 },
+            { "id": "nav-financeiro-1", "type": "menu-item", "value": "💰 Financeiro", "color": "#94a3b8", "x": 20, "y": 250 },
+            { "id": "nav-receber-1", "type": "menu-item", "value": "📋 Contas a Receber", "color": "#94a3b8", "x": 20, "y": 300 },
+            { "id": "nav-despesas-1", "type": "menu-item", "value": "📤 Despesas", "color": "#94a3b8", "x": 20, "y": 350 },
+            { "id": "nav-metas-1", "type": "menu-item", "value": "🎯 Metas", "color": "#94a3b8", "x": 20, "y": 400 }
+          ]
+        },
+        {
+          "id": "header-1",
+          "type": "container",
+          "name": "Cabeçalho Principal",
+          "x": 260,
+          "y": 0,
+          "width": 1180,
+          "height": 80,
+          "background": "#ffffff",
+          "borderBottom": "#e2e8f0",
+          "children": [
+            { "id": "title-1", "type": "text", "value": "Dashboard de Controle", "color": "#0f172a", "fontSize": 24, "x": 40, "y": 25 },
+            { "id": "user-profile-1", "type": "user-avatar", "value": "Dr. Victor (Psicólogo)", "color": "#475569", "x": 950, "y": 28 }
+          ]
+        },
+        {
+          "id": "financial-cards-row",
+          "type": "group",
+          "name": "Linha Financeira",
+          "x": 300,
+          "y": 110,
+          "children": [
+            { "id": "card-previsto", "type": "card", "title": "Previsto do Mês", "value": "R$ 12.500,00", "color": "#1e3a5f", "x": 0, "y": 0, "width": 180, "height": 100 },
+            { "id": "card-faturado", "type": "card", "title": "Faturado (Emitido)", "value": "R$ 9.800,00", "color": "#475569", "x": 200, "y": 0, "width": 180, "height": 100 },
+            { "id": "card-recebido", "type": "card", "title": "Recebido (Caixa)", "value": "R$ 8.200,00", "color": "#10b981", "x": 400, "y": 0, "width": 180, "height": 100 },
+            { "id": "card-areceber", "type": "card", "title": "A Receber", "value": "R$ 4.300,00", "color": "#f59e0b", "x": 600, "y": 0, "width": 180, "height": 100 },
+            { "id": "card-despesas", "type": "card", "title": "Despesas Pagas", "value": "R$ 2.450,00", "color": "#ef4444", "x": 800, "y": 0, "width": 180, "height": 100 },
+            { "id": "card-lucroliquido", "type": "card", "title": "Lucro Líquido", "value": "R$ 5.750,00", "color": "#10b981", "x": 1000, "y": 0, "width": 180, "height": 100 }
+          ]
+        },
+        {
+          "id": "agenda-cards-row",
+          "type": "group",
+          "name": "Indicadores de Agenda",
+          "x": 300,
+          "y": 240,
+          "children": [
+            { "id": "card-agendadas", "type": "card", "title": "Consultas Agendadas", "value": "48 sessões", "color": "#1e3a5f", "x": 0, "y": 0, "width": 280, "height": 100 },
+            { "id": "card-realizadas", "type": "card", "title": "Consultas Realizadas", "value": "32 sessões", "color": "#10b981", "x": 300, "y": 0, "width": 280, "height": 100 },
+            { "id": "card-cancelamentos", "type": "card", "title": "Cancelamentos / Faltas", "value": "4 (Falta: 3 | Canc: 1)", "color": "#ef4444", "x": 600, "y": 0, "width": 280, "height": 100 },
+            { "id": "card-comparecimento", "type": "card", "title": "Taxa de Comparecimento", "value": "89%", "color": "#10b981", "x": 900, "y": 0, "width": 280, "height": 100 }
+          ]
+        },
+        {
+          "id": "goals-panel",
+          "type": "container",
+          "name": "Painel de Metas Financeiras",
+          "x": 300,
+          "y": 380,
+          "width": 1100,
+          "height": 200,
+          "background": "#ffffff",
+          "border": "#e2e8f0",
+          "children": [
+            { "id": "goals-title", "type": "text", "value": "Metas de Faturamento - Junho/2026", "color": "#0f172a", "fontSize": 18, "x": 20, "y": 20 },
+            { "id": "goal-prolabore", "type": "progress-bar", "label": "Pró-Labore Pessoal (Meta: R$ 6.000,00)", "current": "R$ 5.750,00", "percent": 95, "color": "#10b981", "x": 20, "y": 60, "width": 1060 },
+            { "id": "goal-custoconsultorio", "type": "progress-bar", "label": "Despesas Operacionais (Meta Limite: R$ 3.000,00)", "current": "R$ 2.450,00", "percent": 81, "color": "#f59e0b", "x": 20, "y": 120, "width": 1060 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "page-2",
+      "name": "Pacientes",
+      "width": 1440,
+      "height": 900,
+      "elements": [
+        {
+          "id": "sidebar-2",
+          "type": "container",
+          "name": "Sidebar Lateral",
+          "x": 0,
+          "y": 0,
+          "width": 260,
+          "height": 900,
+          "background": "#0f172a",
+          "children": [
+            { "id": "logo-2", "type": "text", "value": "PsicoHub", "color": "#ffffff", "fontSize": 20, "x": 20, "y": 30 },
+            { "id": "nav-dash-2", "type": "menu-item", "value": "🏠 Dashboard", "color": "#94a3b8", "x": 20, "y": 100 },
+            { "id": "nav-pacientes-2", "type": "menu-item", "value": "👤 Pacientes", "color": "#10b981", "x": 20, "y": 150 },
+            { "id": "nav-agenda-2", "type": "menu-item", "value": "📅 Agenda", "color": "#94a3b8", "x": 20, "y": 200 },
+            { "id": "nav-financeiro-2", "type": "menu-item", "value": "💰 Financeiro", "color": "#94a3b8", "x": 20, "y": 250 },
+            { "id": "nav-receber-2", "type": "menu-item", "value": "📋 Contas a Receber", "color": "#94a3b8", "x": 20, "y": 300 },
+            { "id": "nav-despesas-2", "type": "menu-item", "value": "📤 Despesas", "color": "#94a3b8", "x": 20, "y": 350 },
+            { "id": "nav-metas-2", "type": "menu-item", "value": "🎯 Metas", "color": "#94a3b8", "x": 20, "y": 400 }
+          ]
+        },
+        {
+          "id": "header-2",
+          "type": "container",
+          "name": "Cabeçalho Principal",
+          "x": 260,
+          "y": 0,
+          "width": 1180,
+          "height": 80,
+          "background": "#ffffff",
+          "borderBottom": "#e2e8f0",
+          "children": [
+            { "id": "title-2", "type": "text", "value": "Gestão de Pacientes", "color": "#0f172a", "fontSize": 24, "x": 40, "y": 25 },
+            { "id": "user-profile-2", "type": "user-avatar", "value": "Dr. Victor (Psicólogo)", "color": "#475569", "x": 950, "y": 28 }
+          ]
+        },
+        {
+          "id": "action-row-patients",
+          "type": "group",
+          "name": "Barra de Ações",
+          "x": 300,
+          "y": 110,
+          "children": [
+            { "id": "search-input", "type": "input-search", "placeholder": "Buscar paciente pelo nome...", "width": 400, "height": 40, "x": 0, "y": 0 },
+            { "id": "btn-new-patient", "type": "button", "value": "➕ Novo Paciente", "background": "#1e3a5f", "color": "#ffffff", "width": 180, "height": 40, "x": 920, "y": 0 }
+          ]
+        },
+        {
+          "id": "patients-table-container",
+          "type": "container",
+          "name": "Tabela de Pacientes",
+          "x": 300,
+          "y": 170,
+          "width": 1100,
+          "height": 400,
+          "background": "#ffffff",
+          "border": "#e2e8f0",
+          "children": [
+            { "id": "th-nome", "type": "th", "value": "Nome do Paciente", "x": 20, "y": 20, "width": 250 },
+            { "id": "th-whatsapp", "type": "th", "value": "WhatsApp", "x": 280, "y": 20, "width": 150 },
+            { "id": "th-valor", "type": "th", "value": "Valor Consulta", "x": 450, "y": 20, "width": 130 },
+            { "id": "th-frequencia", "type": "th", "value": "Frequência", "x": 600, "y": 20, "width": 120 },
+            { "id": "th-agenda", "type": "th", "value": "Dia / Horário Base", "x": 740, "y": 20, "width": 180 },
+            { "id": "th-status", "type": "th", "value": "Status", "x": 940, "y": 20, "width": 80 },
+            { "id": "th-acoes", "type": "th", "value": "Ações", "x": 1030, "y": 20, "width": 50 },
+
+            { "id": "row1-nome", "type": "td", "value": "Ana Souza", "x": 20, "y": 60 },
+            { "id": "row1-whatsapp", "type": "td", "value": "(11) 99999-1111", "x": 280, "y": 60 },
+            { "id": "row1-valor", "type": "td", "value": "R$ 150,00", "x": 450, "y": 60 },
+            { "id": "row1-frequencia", "type": "td", "value": "Semanal", "x": 600, "y": 60 },
+            { "id": "row1-agenda", "type": "td", "value": "Segunda-feira às 14:00", "x": 740, "y": 60 },
+            { "id": "row1-status", "type": "badge", "value": "Ativo", "color": "#10b981", "x": 940, "y": 55 },
+            { "id": "row1-acoes", "type": "text-link", "value": "Editar", "color": "#1e3a5f", "x": 1030, "y": 60 },
+
+            { "id": "row2-nome", "type": "td", "value": "Bruno Oliveira", "x": 20, "y": 110 },
+            { "id": "row2-whatsapp", "type": "td", "value": "(11) 99999-2222", "x": 280, "y": 110 },
+            { "id": "row2-valor", "type": "td", "value": "R$ 180,00", "x": 450, "y": 110 },
+            { "id": "row2-frequencia", "type": "td", "value": "Quinzenal", "x": 600, "y": 110 },
+            { "id": "row2-agenda", "type": "td", "value": "Terça-feira às 10:00", "x": 740, "y": 110 },
+            { "id": "row2-status", "type": "badge", "value": "Ativo", "color": "#10b981", "x": 940, "y": 105 },
+            { "id": "row2-acoes", "type": "text-link", "value": "Editar", "color": "#1e3a5f", "x": 1030, "y": 110 },
+
+            { "id": "row3-nome", "type": "td", "value": "Carla Mendonça", "x": 20, "y": 160 },
+            { "id": "row3-whatsapp", "type": "td", "value": "(11) 99999-3333", "x": 280, "y": 160 },
+            { "id": "row3-valor", "type": "td", "value": "R$ 200,00", "x": 450, "y": 160 },
+            { "id": "row3-frequencia", "type": "td", "value": "Mensal", "x": 600, "y": 160 },
+            { "id": "row3-agenda", "type": "td", "value": "Sexta-feira às 16:00", "x": 740, "y": 160 },
+            { "id": "row3-status", "type": "badge", "value": "Inativo", "color": "#ef4444", "x": 940, "y": 155 },
+            { "id": "row3-acoes", "type": "text-link", "value": "Editar", "color": "#1e3a5f", "x": 1030, "y": 160 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "page-3",
+      "name": "Agenda Kanban",
+      "width": 1440,
+      "height": 900,
+      "elements": [
+        {
+          "id": "sidebar-3",
+          "type": "container",
+          "name": "Sidebar Lateral",
+          "x": 0,
+          "y": 0,
+          "width": 260,
+          "height": 900,
+          "background": "#0f172a",
+          "children": [
+            { "id": "logo-3", "type": "text", "value": "PsicoHub", "color": "#ffffff", "fontSize": 20, "x": 20, "y": 30 },
+            { "id": "nav-dash-3", "type": "menu-item", "value": "🏠 Dashboard", "color": "#94a3b8", "x": 20, "y": 100 },
+            { "id": "nav-pacientes-3", "type": "menu-item", "value": "👤 Pacientes", "color": "#94a3b8", "x": 20, "y": 150 },
+            { "id": "nav-agenda-3", "type": "menu-item", "value": "📅 Agenda", "color": "#10b981", "x": 20, "y": 200 },
+            { "id": "nav-financeiro-3", "type": "menu-item", "value": "💰 Financeiro", "color": "#94a3b8", "x": 20, "y": 250 },
+            { "id": "nav-receber-3", "type": "menu-item", "value": "📋 Contas a Receber", "color": "#94a3b8", "x": 20, "y": 300 },
+            { "id": "nav-despesas-3", "type": "menu-item", "value": "📤 Despesas", "color": "#94a3b8", "x": 20, "y": 350 },
+            { "id": "nav-metas-3", "type": "menu-item", "value": "🎯 Metas", "color": "#94a3b8", "x": 20, "y": 400 }
+          ]
+        },
+        {
+          "id": "header-3",
+          "type": "container",
+          "name": "Cabeçalho Principal",
+          "x": 260,
+          "y": 0,
+          "width": 1180,
+          "height": 80,
+          "background": "#ffffff",
+          "borderBottom": "#e2e8f0",
+          "children": [
+            { "id": "title-3", "type": "text", "value": "Agenda Semanal", "color": "#0f172a", "fontSize": 24, "x": 40, "y": 25 },
+            { "id": "user-profile-3", "type": "user-avatar", "value": "Dr. Victor (Psicólogo)", "color": "#475569", "x": 950, "y": 28 }
+          ]
+        },
+        {
+          "id": "controls-agenda",
+          "type": "group",
+          "name": "Controles de Navegação",
+          "x": 300,
+          "y": 110,
+          "children": [
+            { "id": "btn-prev-week", "type": "button", "value": "◀️ Anterior", "background": "#ffffff", "color": "#475569", "width": 110, "height": 36, "x": 0, "y": 0 },
+            { "id": "text-current-week", "type": "text", "value": "Semana de 22/06 a 26/06/2026", "color": "#0f172a", "fontSize": 16, "fontWeight": "bold", "x": 130, "y": 8 },
+            { "id": "btn-next-week", "type": "button", "value": "Próxima ▶️", "background": "#ffffff", "color": "#475569", "width": 110, "height": 36, "x": 420, "y": 0 },
+            { "id": "btn-generate-week", "type": "button", "value": "⚡ Gerar Agenda Base", "background": "#1e3a5f", "color": "#ffffff", "width": 180, "height": 36, "x": 920, "y": 0 }
+          ]
+        },
+        {
+          "id": "kanban-board-container",
+          "type": "group",
+          "name": "Quadro Kanban",
+          "x": 300,
+          "y": 170,
+          "children": [
+            {
+              "id": "col-segunda",
+              "type": "kanban-column",
+              "title": "Segunda-feira (22/06)",
+              "x": 0,
+              "y": 0,
+              "width": 210,
+              "height": 650,
+              "background": "#f1f5f9",
+              "cards": [
+                { "id": "card-c1", "type": "kanban-card", "time": "10:00", "patient": "Daniel Lima", "value": "R$ 150,00", "status": "Realizada", "statusColor": "#10b981", "x": 10, "y": 50, "width": 190, "height": 110 },
+                { "id": "card-c2", "type": "kanban-card", "time": "14:00", "patient": "Ana Souza", "value": "R$ 150,00", "status": "Realizada", "statusColor": "#10b981", "x": 10, "y": 170, "width": 190, "height": 110 }
+              ]
+            },
+            {
+              "id": "col-terca",
+              "type": "kanban-column",
+              "title": "Terça-feira (23/06)",
+              "x": 220,
+              "y": 0,
+              "width": 210,
+              "height": 650,
+              "background": "#f1f5f9",
+              "cards": [
+                { "id": "card-c3", "type": "kanban-card", "time": "10:00", "patient": "Bruno Oliveira", "value": "R$ 180,00", "status": "Falta (Cobrar)", "statusColor": "#ef4444", "x": 10, "y": 50, "width": 190, "height": 110 },
+                { "id": "card-c4", "type": "kanban-card", "time": "16:00", "patient": "Eduarda Neri", "value": "R$ 150,00", "status": "Realizada", "statusColor": "#10b981", "x": 10, "y": 170, "width": 190, "height": 110 }
+              ]
+            },
+            {
+              "id": "col-quarta",
+              "type": "kanban-column",
+              "title": "Quarta-feira (24/06)",
+              "x": 440,
+              "y": 0,
+              "width": 210,
+              "height": 650,
+              "background": "#f1f5f9",
+              "cards": [
+                { "id": "card-c5", "type": "kanban-card", "time": "09:00", "patient": "Felipe Mota", "value": "R$ 150,00", "status": "Agendada", "statusColor": "#f59e0b", "x": 10, "y": 50, "width": 190, "height": 110 },
+                { "id": "card-c6", "type": "kanban-card", "time": "11:00", "patient": "Gabriela Paz", "value": "R$ 200,00", "status": "Agendada", "statusColor": "#f59e0b", "x": 10, "y": 170, "width": 190, "height": 110 }
+              ]
+            },
+            {
+              "id": "col-quinta",
+              "type": "kanban-column",
+              "title": "Quinta-feira (25/06)",
+              "x": 660,
+              "y": 0,
+              "width": 210,
+              "height": 650,
+              "background": "#f1f5f9",
+              "cards": [
+                { "id": "card-c7", "type": "kanban-card", "time": "14:00", "patient": "Helena Dias", "value": "R$ 160,00", "status": "Agendada", "statusColor": "#f59e0b", "x": 10, "y": 50, "width": 190, "height": 110 },
+                { "id": "card-c8", "type": "kanban-card", "time": "15:30", "patient": "Igor Santos", "value": "R$ 150,00", "status": "Cancelada", "statusColor": "#ef4444", "x": 10, "y": 170, "width": 190, "height": 110 }
+              ]
+            },
+            {
+              "id": "col-sexta",
+              "type": "kanban-column",
+              "title": "Sexta-feira (26/06)",
+              "x": 880,
+              "y": 0,
+              "width": 210,
+              "height": 650,
+              "background": "#f1f5f9",
+              "cards": [
+                { "id": "card-c9", "type": "kanban-card", "time": "16:00", "patient": "Julia Silva", "value": "R$ 150,00", "status": "Agendada", "statusColor": "#f59e0b", "x": 10, "y": 50, "width": 190, "height": 110 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "page-4",
+      "name": "Contas a Receber",
+      "width": 1440,
+      "height": 900,
+      "elements": [
+        {
+          "id": "sidebar-4",
+          "type": "container",
+          "name": "Sidebar Lateral",
+          "x": 0,
+          "y": 0,
+          "width": 260,
+          "height": 900,
+          "background": "#0f172a",
+          "children": [
+            { "id": "logo-4", "type": "text", "value": "PsicoHub", "color": "#ffffff", "fontSize": 20, "x": 20, "y": 30 },
+            { "id": "nav-dash-4", "type": "menu-item", "value": "🏠 Dashboard", "color": "#94a3b8", "x": 20, "y": 100 },
+            { "id": "nav-pacientes-4", "type": "menu-item", "value": "👤 Pacientes", "color": "#94a3b8", "x": 20, "y": 150 },
+            { "id": "nav-agenda-4", "type": "menu-item", "value": "📅 Agenda", "color": "#94a3b8", "x": 20, "y": 200 },
+            { "id": "nav-financeiro-4", "type": "menu-item", "value": "💰 Financeiro", "color": "#94a3b8", "x": 20, "y": 250 },
+            { "id": "nav-receber-4", "type": "menu-item", "value": "📋 Contas a Receber", "color": "#10b981", "x": 20, "y": 300 },
+            { "id": "nav-despesas-4", "type": "menu-item", "value": "📤 Despesas", "color": "#94a3b8", "x": 20, "y": 350 },
+            { "id": "nav-metas-4", "type": "menu-item", "value": "🎯 Metas", "color": "#94a3b8", "x": 20, "y": 400 }
+          ]
+        },
+        {
+          "id": "header-4",
+          "type": "container",
+          "name": "Cabeçalho Principal",
+          "x": 260,
+          "y": 0,
+          "width": 1180,
+          "height": 80,
+          "background": "#ffffff",
+          "borderBottom": "#e2e8f0",
+          "children": [
+            { "id": "title-4", "type": "text", "value": "Contas a Receber", "color": "#0f172a", "fontSize": 24, "x": 40, "y": 25 },
+            { "id": "user-profile-4", "type": "user-avatar", "value": "Dr. Victor (Psicólogo)", "color": "#475569", "x": 950, "y": 28 }
+          ]
+        },
+        {
+          "id": "financial-status-receivables",
+          "type": "group",
+          "name": "Resumo Recebíveis",
+          "x": 300,
+          "y": 110,
+          "children": [
+            { "id": "lbl-filter-all", "type": "tab-filter", "value": "Todos (R$ 12.500,00)", "active": true, "x": 0, "y": 5 },
+            { "id": "lbl-filter-pending", "type": "tab-filter", "value": "Pendentes (R$ 2.500,00)", "active": false, "x": 180, "y": 5 },
+            { "id": "lbl-filter-paid", "type": "tab-filter", "value": "Pagos (R$ 8.200,00)", "active": false, "x": 380, "y": 5 },
+            { "id": "lbl-filter-overdue", "type": "tab-filter", "value": "Atrasados (R$ 1.800,00)", "active": false, "x": 560, "y": 5 }
+          ]
+        },
+        {
+          "id": "receivables-table-container",
+          "type": "container",
+          "name": "Tabela de Recebimentos",
+          "x": 300,
+          "y": 160,
+          "width": 1100,
+          "height": 450,
+          "background": "#ffffff",
+          "border": "#e2e8f0",
+          "children": [
+            { "id": "th-rec-paciente", "type": "th", "value": "Paciente", "x": 20, "y": 20, "width": 250 },
+            { "id": "th-rec-valor", "type": "th", "value": "Valor da Consulta", "x": 290, "y": 20, "width": 150 },
+            { "id": "th-rec-vencimento", "type": "th", "value": "Data Vencimento", "x": 460, "y": 20, "width": 150 },
+            { "id": "th-rec-pagamento", "type": "th", "value": "Data Pagamento", "x": 630, "y": 20, "width": 150 },
+            { "id": "th-rec-status", "type": "th", "value": "Status", "x": 800, "y": 20, "width": 120 },
+            { "id": "th-rec-acoes", "type": "th", "value": "Ações", "x": 940, "y": 20, "width": 140 },
+
+            { "id": "row1-rec-paciente", "type": "td", "value": "Ana Souza", "x": 20, "y": 60 },
+            { "id": "row1-rec-valor", "type": "td", "value": "R$ 150,00", "x": 290, "y": 60 },
+            { "id": "row1-rec-vencimento", "type": "td", "value": "29/06/2026", "x": 460, "y": 60 },
+            { "id": "row1-rec-pagamento", "type": "td", "value": "-", "x": 630, "y": 60 },
+            { "id": "row1-rec-status", "type": "badge", "value": "Pendente", "color": "#f59e0b", "x": 800, "y": 55 },
+            { "id": "row1-rec-btn", "type": "button-sm", "value": "Marcar como Pago", "background": "#10b981", "color": "#ffffff", "x": 940, "y": 52 },
+
+            { "id": "row2-rec-paciente", "type": "td", "value": "Daniel Lima", "x": 20, "y": 110 },
+            { "id": "row2-rec-valor", "type": "td", "value": "R$ 150,00", "x": 290, "y": 110 },
+            { "id": "row2-rec-vencimento", "type": "td", "value": "22/06/2026", "x": 460, "y": 110 },
+            { "id": "row2-rec-pagamento", "type": "td", "value": "22/06/2026", "x": 630, "y": 110 },
+            { "id": "row2-rec-status", "type": "badge", "value": "Pago", "color": "#10b981", "x": 800, "y": 105 },
+            { "id": "row2-rec-btn", "type": "text-muted", "value": "Concluído", "x": 940, "y": 110 },
+
+            { "id": "row3-rec-paciente", "type": "td", "value": "Bruno Oliveira", "x": 20, "y": 160 },
+            { "id": "row3-rec-valor", "type": "td", "value": "R$ 180,00", "x": 290, "y": 160 },
+            { "id": "row3-rec-vencimento", "type": "td", "value": "15/06/2026", "x": 460, "y": 160 },
+            { "id": "row3-rec-pagamento", "type": "td", "value": "-", "x": 630, "y": 160 },
+            { "id": "row3-rec-status", "type": "badge", "value": "Atrasado", "color": "#ef4444", "x": 800, "y": 155 },
+            { "id": "row3-rec-btn", "type": "button-sm", "value": "Marcar como Pago", "background": "#10b981", "color": "#ffffff", "x": 940, "y": 152 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "page-5",
+      "name": "Despesas",
+      "width": 1440,
+      "height": 900,
+      "elements": [
+        {
+          "id": "sidebar-5",
+          "type": "container",
+          "name": "Sidebar Lateral",
+          "x": 0,
+          "y": 0,
+          "width": 260,
+          "height": 900,
+          "background": "#0f172a",
+          "children": [
+            { "id": "logo-5", "type": "text", "value": "PsicoHub", "color": "#ffffff", "fontSize": 20, "x": 20, "y": 30 },
+            { "id": "nav-dash-5", "type": "menu-item", "value": "🏠 Dashboard", "color": "#94a3b8", "x": 20, "y": 100 },
+            { "id": "nav-pacientes-5", "type": "menu-item", "value": "👤 Pacientes", "color": "#94a3b8", "x": 20, "y": 150 },
+            { "id": "nav-agenda-5", "type": "menu-item", "value": "📅 Agenda", "color": "#94a3b8", "x": 20, "y": 200 },
+            { "id": "nav-financeiro-5", "type": "menu-item", "value": "💰 Financeiro", "color": "#94a3b8", "x": 20, "y": 250 },
+            { "id": "nav-receber-5", "type": "menu-item", "value": "📋 Contas a Receber", "color": "#94a3b8", "x": 20, "y": 300 },
+            { "id": "nav-despesas-5", "type": "menu-item", "value": "📤 Despesas", "color": "#10b981", "x": 20, "y": 350 },
+            { "id": "nav-metas-5", "type": "menu-item", "value": "🎯 Metas", "color": "#94a3b8", "x": 20, "y": 400 }
+          ]
+        },
+        {
+          "id": "header-5",
+          "type": "container",
+          "name": "Cabeçalho Principal",
+          "x": 260,
+          "y": 0,
+          "width": 1180,
+          "height": 80,
+          "background": "#ffffff",
+          "borderBottom": "#e2e8f0",
+          "children": [
+            { "id": "title-5", "type": "text", "value": "Controle de Despesas", "color": "#0f172a", "fontSize": 24, "x": 40, "y": 25 },
+            { "id": "user-profile-5", "type": "user-avatar", "value": "Dr. Victor (Psicólogo)", "color": "#475569", "x": 950, "y": 28 }
+          ]
+        },
+        {
+          "id": "form-despesa-container",
+          "type": "container",
+          "name": "Formulário Lançar Despesa",
+          "x": 300,
+          "y": 120,
+          "width": 420,
+          "height": 450,
+          "background": "#ffffff",
+          "border": "#e2e8f0",
+          "children": [
+            { "id": "lbl-form-title", "type": "text", "value": "Nova Despesa", "color": "#0f172a", "fontSize": 18, "fontWeight": "bold", "x": 20, "y": 20 },
+            
+            { "id": "lbl-desc", "type": "label", "value": "Descrição da Despesa", "x": 20, "y": 60 },
+            { "id": "input-desc", "type": "input-text", "placeholder": "Ex: Aluguel do consultório", "width": 380, "height": 40, "x": 20, "y": 80 },
+
+            { "id": "lbl-valor", "type": "label", "value": "Valor (R$)", "x": 20, "y": 140 },
+            { "id": "input-valor", "type": "input-text", "placeholder": "Ex: 1500,00", "width": 380, "height": 40, "x": 20, "y": 160 },
+
+            { "id": "lbl-data", "type": "label", "value": "Data de Vencimento / Pagamento", "x": 20, "y": 220 },
+            { "id": "input-data", "type": "input-date", "width": 380, "height": 40, "x": 20, "y": 240 },
+
+            { "id": "lbl-cat", "type": "label", "value": "Categoria", "x": 20, "y": 300 },
+            { "id": "select-cat", "type": "select", "options": ["Aluguel", "Internet", "Marketing", "Impostos", "Ferramentas", "Alimentação", "Outros"], "width": 380, "height": 40, "x": 20, "y": 320 },
+
+            { "id": "btn-save-despesa", "type": "button", "value": "Salvar Despesa 📤", "background": "#ef4444", "color": "#ffffff", "width": 380, "height": 45, "x": 20, "y": 385 }
+          ]
+        },
+        {
+          "id": "list-despesas-container",
+          "type": "container",
+          "name": "Listagem de Despesas do Mês",
+          "x": 750,
+          "y": 120,
+          "width": 650,
+          "height": 450,
+          "background": "#ffffff",
+          "border": "#e2e8f0",
+          "children": [
+            { "id": "lbl-list-title", "type": "text", "value": "Histórico de Despesas - Junho", "color": "#0f172a", "fontSize": 18, "fontWeight": "bold", "x": 20, "y": 20 },
+            { "id": "lbl-total-despesas", "type": "text", "value": "Total no Mês: R$ 2.450,00", "color": "#ef4444", "fontSize": 16, "fontWeight": "bold", "x": 420, "y": 22 },
+
+            { "id": "th-d-desc", "type": "th", "value": "Descrição", "x": 20, "y": 60, "width": 200 },
+            { "id": "th-d-categoria", "type": "th", "value": "Categoria", "x": 240, "y": 60, "width": 120 },
+            { "id": "th-d-data", "type": "th", "value": "Data", "x": 380, "y": 60, "width": 100 },
+            { "id": "th-d-valor", "type": "th", "value": "Valor", "x": 500, "y": 60, "width": 100 },
+
+            { "id": "row1-d-desc", "type": "td", "value": "Aluguel da Sala", "x": 20, "y": 100 },
+            { "id": "row1-d-cat", "type": "badge", "value": "Aluguel", "color": "#ef4444", "x": 240, "y": 95 },
+            { "id": "row1-d-data", "type": "td", "value": "05/06/2026", "x": 380, "y": 100 },
+            { "id": "row1-d-valor", "type": "td", "value": "R$ 1.800,00", "x": 500, "y": 100 },
+
+            { "id": "row2-d-desc", "type": "td", "value": "Mensalidade do Sistema", "x": 20, "y": 150 },
+            { "id": "row2-d-cat", "type": "badge", "value": "Ferramentas", "color": "#ef4444", "x": 240, "y": 145 },
+            { "id": "row2-d-data", "type": "td", "value": "10/06/2026", "x": 380, "y": 150 },
+            { "id": "row2-d-valor", "type": "td", "value": "R$ 150,00", "x": 500, "y": 150 },
+
+            { "id": "row3-d-desc", "type": "td", "value": "Campanha do Instagram", "x": 20, "y": 200 },
+            { "id": "row3-d-cat", "type": "badge", "value": "Marketing", "color": "#ef4444", "x": 240, "y": 195 },
+            { "id": "row3-d-data", "type": "td", "value": "18/06/2026", "x": 380, "y": 200 },
+            { "id": "row3-d-valor", "type": "td", "value": "R$ 500,00", "x": 500, "y": 200 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "page-6",
+      "name": "Metas",
+      "width": 1440,
+      "height": 900,
+      "elements": [
+        {
+          "id": "sidebar-6",
+          "type": "container",
+          "name": "Sidebar Lateral",
+          "x": 0,
+          "y": 0,
+          "width": 260,
+          "height": 900,
+          "background": "#0f172a",
+          "children": [
+            { "id": "logo-6", "type": "text", "value": "PsicoHub", "color": "#ffffff", "fontSize": 20, "x": 20, "y": 30 },
+            { "id": "nav-dash-6", "type": "menu-item", "value": "🏠 Dashboard", "color": "#94a3b8", "x": 20, "y": 100 },
+            { "id": "nav-pacientes-6", "type": "menu-item", "value": "👤 Pacientes", "color": "#94a3b8", "x": 20, "y": 150 },
+            { "id": "nav-agenda-6", "type": "menu-item", "value": "📅 Agenda", "color": "#94a3b8", "x": 20, "y": 200 },
+            { "id": "nav-financeiro-6", "type": "menu-item", "value": "💰 Financeiro", "color": "#94a3b8", "x": 20, "y": 250 },
+            { "id": "nav-receber-6", "type": "menu-item", "value": "📋 Contas a Receber", "color": "#94a3b8", "x": 20, "y": 300 },
+            { "id": "nav-despesas-6", "type": "menu-item", "value": "📤 Despesas", "color": "#94a3b8", "x": 20, "y": 350 },
+            { "id": "nav-metas-6", "type": "menu-item", "value": "🎯 Metas", "color": "#10b981", "x": 20, "y": 400 }
+          ]
+        },
+        {
+          "id": "header-6",
+          "type": "container",
+          "name": "Cabeçalho Principal",
+          "x": 260,
+          "y": 0,
+          "width": 1180,
+          "height": 80,
+          "background": "#ffffff",
+          "borderBottom": "#e2e8f0",
+          "children": [
+            { "id": "title-6", "type": "text", "value": "Definição de Metas", "color": "#0f172a", "fontSize": 24, "x": 40, "y": 25 },
+            { "id": "user-profile-6", "type": "user-avatar", "value": "Dr. Victor (Psicólogo)", "color": "#475569", "x": 950, "y": 28 }
+          ]
+        },
+        {
+          "id": "form-metas-container",
+          "type": "container",
+          "name": "Configuração de Metas",
+          "x": 300,
+          "y": 120,
+          "width": 420,
+          "height": 380,
+          "background": "#ffffff",
+          "border": "#e2e8f0",
+          "children": [
+            { "id": "lbl-meta-form-title", "type": "text", "value": "Meta Mensal - Planejamento", "color": "#0f172a", "fontSize": 18, "fontWeight": "bold", "x": 20, "y": 20 },
+            
+            { "id": "lbl-meta-prolabore", "type": "label", "value": "Meta de Pró-Labore Pessoal (R$)", "x": 20, "y": 70 },
+            { "id": "input-meta-prolabore", "type": "input-text", "placeholder": "Ex: 6000,00", "width": 380, "height": 40, "x": 20, "y": 90 },
+
+            { "id": "lbl-meta-despesas", "type": "label", "value": "Meta Limite de Despesas do Consultório (R$)", "x": 20, "y": 160 },
+            { "id": "input-meta-despesas", "type": "input-text", "placeholder": "Ex: 3000,00", "width": 380, "height": 40, "x": 20, "y": 180 },
+
+            { "id": "lbl-meta-total-automatica", "type": "text", "value": "Meta de Faturamento Total: R$ 9.000,00", "color": "#1e3a5f", "fontSize": 14, "fontWeight": "bold", "x": 20, "y": 250 },
+
+            { "id": "btn-save-metas", "type": "button", "value": "Salvar e Atualizar Metas 🎯", "background": "#1e3a5f", "color": "#ffffff", "width": 380, "height": 45, "x": 20, "y": 300 }
+          ]
+        },
+        {
+          "id": "progress-metas-container",
+          "type": "container",
+          "name": "Visualização do Progresso",
+          "x": 750,
+          "y": 120,
+          "width": 650,
+          "height": 380,
+          "background": "#ffffff",
+          "border": "#e2e8f0",
+          "children": [
+            { "id": "lbl-progress-title", "type": "text", "value": "Acompanhamento em Tempo Real", "color": "#0f172a", "fontSize": 18, "fontWeight": "bold", "x": 20, "y": 20 },
+
+            { "id": "progress-prolabore-bar", "type": "progress-card", "title": "Pró-Labore Pessoal (Ganhos Líquidos)", "target": "R$ 6.000,00", "current": "R$ 5.750,00", "percent": 95, "color": "#10b981", "x": 20, "y": 70, "width": 610, "height": 100 },
+            { "id": "progress-despesas-bar", "type": "progress-card", "title": "Custo do Consultório (Limite de Gastos)", "target": "R$ 3.000,00", "current": "R$ 2.450,00", "percent": 81, "color": "#f59e0b", "x": 20, "y": 190, "width": 610, "height": 100 },
+
+            { "id": "meta-summary-text", "type": "text", "value": "Falta apenas R$ 250,00 para bater sua meta de Pró-labore este mês!", "color": "#10b981", "fontSize": 14, "fontWeight": "bold", "x": 20, "y": 320 }
+          ]
+        }
+      ]
+    }
+  ]
+}

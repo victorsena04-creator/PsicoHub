@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Despesas - PsicoHub</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Geist+Mono:wght@400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error": "#ba1a1a",
+                        "on-secondary": "#ffffff",
+                        "surface-container-low": "#f2f3ff",
+                        "surface-dim": "#d2d9f4",
+                        "secondary-container": "#86f2e4",
+                        "secondary-fixed-dim": "#6bd8cb",
+                        "on-tertiary": "#ffffff",
+                        "surface": "#faf8ff",
+                        "on-tertiary-fixed-variant": "#2f2ebe",
+                        "tertiary": "#3130c0",
+                        "surface-bright": "#faf8ff",
+                        "on-tertiary-container": "#d9d8ff",
+                        "primary-fixed-dim": "#c3c0ff",
+                        "on-background": "#131b2e",
+                        "secondary": "#006a61",
+                        "outline-variant": "#c7c4d8",
+                        "error-container": "#ffdad6",
+                        "on-primary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "surface-container": "#eaedff",
+                        "tertiary-fixed": "#e1e0ff",
+                        "surface-container-high": "#e2e7ff",
+                        "primary-fixed": "#e2dfff",
+                        "primary-container": "#4f46e5",
+                        "primary": "#3525cd",
+                        "on-primary-fixed": "#0f0069",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#eef0ff",
+                        "tertiary-container": "#4b4dd8",
+                        "background": "#faf8ff",
+                        "on-surface": "#131b2e",
+                        "on-primary-fixed-variant": "#3323cc",
+                        "on-primary-container": "#dad7ff",
+                        "tertiary-fixed-dim": "#c0c1ff",
+                        "on-secondary-fixed": "#00201d",
+                        "on-tertiary-fixed": "#07006c",
+                        "on-surface-variant": "#464555",
+                        "on-secondary-fixed-variant": "#005049",
+                        "on-secondary-container": "#006f66",
+                        "inverse-primary": "#c3c0ff",
+                        "secondary-fixed": "#89f5e7",
+                        "outline": "#777587",
+                        "inverse-surface": "#283044",
+                        "surface-variant": "#dae2fd",
+                        "surface-tint": "#4d44e3",
+                        "surface-container-highest": "#dae2fd",
+                        
+                        "pj-color": "#4f46e5",
+                        "pj-bg": "rgba(79, 70, 229, 0.1)",
+                        "pf-color": "#006a61",
+                        "pf-bg": "rgba(0, 106, 97, 0.1)"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "lg": "24px",
+                        "base": "4px",
+                        "xs": "4px",
+                        "sm": "8px",
+                        "sidebar-width": "240px",
+                        "md": "16px",
+                        "2xl": "48px",
+                        "xl": "32px",
+                        "container-max": "1440px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "mono-sm": ["Geist Mono"],
+                        "label-sm": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "headline-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "mono-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                        "label-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "headline-lg": ["30px", {"lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+          font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24
+        }
+        
+        .nav-item-active {
+            position: relative;
+        }
+        
+        .nav-item-active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background-color: theme('colors.primary');
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body-md text-body-md antialiased h-screen overflow-hidden flex">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[240px] bg-surface border-r border-outline-variant flex flex-col py-6 z-50">
+<!-- Brand -->
+<div class="px-8 mb-8">
+<h1 class="font-headline-md text-headline-md font-bold text-primary">PsicoHub</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Clinical Management</p>
+</div>
+<!-- CTA -->
+<div class="px-4 mb-6">
+<button class="w-full bg-primary text-on-primary py-2 px-4 rounded-lg font-label-md text-label-md flex items-center justify-center gap-2 hover:bg-primary-fixed-dim transition-colors">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                New Appointment
+            </button>
+</div>
+<!-- Navigation Tabs -->
+<nav class="flex-1 flex flex-col gap-1 px-2">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-md font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-md font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">calendar_month</span>
+                Agenda
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-container/10 text-primary font-bold border-l-4 border-primary rounded-r-md font-label-md text-label-md nav-item-active" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">payments</span>
+                Financials
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-md font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">groups</span>
+                Patients
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-md font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">analytics</span>
+                Analytics
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-md font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+</nav>
+<!-- Footer Navigation -->
+<div class="px-2 mt-auto">
+<a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-md font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined text-[20px]">help</span>
+                Help Center
+            </a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-md font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined text-[20px]">logout</span>
+                Logout
+            </a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<div class="flex-1 ml-[240px] flex flex-col h-full bg-surface-bright">
+<!-- TopNavBar -->
+<header class="h-16 border-b border-outline-variant bg-surface flex justify-between items-center px-8 w-full z-40 sticky top-0">
+<div class="flex items-center w-full max-w-[400px]">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container rounded-lg border-none text-body-md focus:ring-2 focus:ring-primary outline-none" placeholder="Search..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant ml-2">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A small, professional headshot of a psychologist smiling gently in a bright, modern office with soft lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJmztSqQLZ1oGo9ebDP6WrKZdAmJ4TS4jzc3r9AiJvdi0bx0bjFLdZ4Y0RtqsWUTGS64Z9ynjPTmhdfwWqQPuzZ9Ct9SC37AIGkZBdOH_rAALmy3eUbcrG1YwlEe31y9tf6JdrHY7hvUuNj_2-r0pPlJqG-AedM0BwAQibykOOdQhixYMgmX1SUd7JXc6XDboRm5sn6xRnWoZXEqvTxNDJ72ewcnXQVguLiHRyfxFVrWQex3byO4tnOF4bPoV3jDXGE1cpZwmrzkk"/>
+</div>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 overflow-y-auto p-8 flex justify-center">
+<div class="w-full max-w-container-max space-y-8">
+<!-- Header -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-background mb-1">Gestão de Despesas</h2>
+<p class="text-on-surface-variant font-body-md text-body-md">Controle detalhado de gastos pessoais e empresariais.</p>
+</div>
+<button class="bg-primary text-on-primary py-2.5 px-5 rounded-lg font-label-md text-label-md flex items-center gap-2 hover:bg-primary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                        Nova Despesa
+                    </button>
+</div>
+<!-- Main Layout Grid -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Left Column: Registration Form (4 cols) -->
+<div class="col-span-12 lg:col-span-4">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] sticky top-6">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-6 border-b border-outline-variant pb-4">Registrar Saída</h3>
+<form class="space-y-5">
+<!-- Origin Selector (PF/PJ) -->
+<div>
+<label class="block font-label-sm text-label-sm text-on-surface-variant mb-2">Conta Origem</label>
+<div class="grid grid-cols-2 gap-3">
+<label class="relative flex cursor-pointer rounded-lg border bg-surface-container-lowest p-3 shadow-sm focus:outline-none border-primary bg-primary/5">
+<input checked="" class="sr-only" name="origin" type="radio" value="pj"/>
+<span class="flex flex-1">
+<span class="flex flex-col">
+<span class="block font-label-md text-label-md text-pj-color font-bold">PJ Business</span>
+<span class="mt-1 flex items-center text-body-md text-on-surface-variant">Clínica</span>
+</span>
+</span>
+<span class="material-symbols-outlined text-pj-color absolute right-3 top-3">check_circle</span>
+</label>
+<label class="relative flex cursor-pointer rounded-lg border bg-surface-container-lowest p-3 shadow-sm focus:outline-none border-outline-variant hover:bg-surface-container-high transition-colors">
+<input class="sr-only" name="origin" type="radio" value="pf"/>
+<span class="flex flex-1">
+<span class="flex flex-col">
+<span class="block font-label-md text-label-md text-pf-color font-bold">PF Personal</span>
+<span class="mt-1 flex items-center text-body-md text-on-surface-variant">Pessoal</span>
+</span>
+</span>
+</label>
+</div>
+</div>
+<!-- Value & Date Row -->
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Valor (R$)</label>
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant font-mono-sm">R$</span>
+<input class="w-full pl-9 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-md focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all font-mono-sm text-error" placeholder="0,00" type="text"/>
+</div>
+</div>
+<div>
+<label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Data</label>
+<input class="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-md focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface" type="date"/>
+</div>
+</div>
+<!-- Description -->
+<div>
+<label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Descrição</label>
+<input class="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-md focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface" placeholder="Ex: Conta de Luz" type="text"/>
+</div>
+<!-- Category -->
+<div>
+<label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Categoria</label>
+<select class="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-md focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface appearance-none">
+<option disabled="" selected="" value="">Selecione uma categoria...</option>
+<option value="aluguel">Aluguel</option>
+<option value="internet">Internet</option>
+<option value="marketing">Marketing</option>
+<option value="impostos">Impostos</option>
+<option value="ferramentas">Ferramentas / Software</option>
+<option value="alimentacao">Alimentação</option>
+<option value="outros">Outros</option>
+</select>
+</div>
+<div class="pt-4 mt-4 border-t border-outline-variant flex justify-end gap-3">
+<button class="px-4 py-2 text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-high rounded-lg transition-colors" type="button">Limpar</button>
+<button class="px-6 py-2 bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary-container transition-colors shadow-sm" type="button">Salvar Despesa</button>
+</div>
+</form>
+</div>
+</div>
+<!-- Right Column: History & Filtering (8 cols) -->
+<div class="col-span-12 lg:col-span-8 flex flex-col gap-6">
+<!-- Filters Bar -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+<div class="flex bg-surface-container p-1 rounded-lg">
+<button class="px-4 py-1.5 rounded-md bg-surface-container-lowest text-on-surface font-label-md text-label-md shadow-sm border border-outline-variant">Consolidado</button>
+<button class="px-4 py-1.5 rounded-md text-on-surface-variant font-label-md text-label-md hover:text-on-surface transition-colors">Apenas PJ</button>
+<button class="px-4 py-1.5 rounded-md text-on-surface-variant font-label-md text-label-md hover:text-on-surface transition-colors">Apenas PF</button>
+</div>
+<div class="flex items-center gap-3">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">calendar_today</span>
+<select class="pl-9 pr-8 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-md text-on-surface appearance-none outline-none focus:border-primary">
+<option>Este Mês (Outubro)</option>
+<option>Mês Anterior</option>
+<option>Últimos 30 dias</option>
+</select>
+</div>
+<button class="w-9 h-9 flex items-center justify-center border border-outline-variant rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[20px]">filter_list</span>
+</button>
+</div>
+</div>
+<!-- Data Table -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)]">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant">
+<th class="px-6 py-3 font-label-sm text-label-sm text-on-surface-variant font-medium">Data</th>
+<th class="px-6 py-3 font-label-sm text-label-sm text-on-surface-variant font-medium">Descrição</th>
+<th class="px-6 py-3 font-label-sm text-label-sm text-on-surface-variant font-medium">Categoria</th>
+<th class="px-6 py-3 font-label-sm text-label-sm text-on-surface-variant font-medium">Origem</th>
+<th class="px-6 py-3 font-label-sm text-label-sm text-on-surface-variant font-medium text-right">Valor</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant text-body-md text-on-surface">
+<!-- Row 1 PJ -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-6 py-4 text-on-surface-variant font-mono-sm">24/10/2023</td>
+<td class="px-6 py-4 font-medium">Aluguel Consultório</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2 py-1 rounded bg-surface-container text-on-surface-variant text-xs">Aluguel</span>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[rgba(79,70,229,0.1)] text-[#4f46e5]">PJ</span>
+</td>
+<td class="px-6 py-4 text-right text-error font-mono-sm">- R$ 2.500,00</td>
+</tr>
+<!-- Row 2 PF -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-6 py-4 text-on-surface-variant font-mono-sm">22/10/2023</td>
+<td class="px-6 py-4 font-medium">Supermercado</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2 py-1 rounded bg-surface-container text-on-surface-variant text-xs">Alimentação</span>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[rgba(0,106,97,0.1)] text-[#006a61]">PF</span>
+</td>
+<td class="px-6 py-4 text-right text-error font-mono-sm">- R$ 850,30</td>
+</tr>
+<!-- Row 3 PJ -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-6 py-4 text-on-surface-variant font-mono-sm">20/10/2023</td>
+<td class="px-6 py-4 font-medium">Google Ads</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2 py-1 rounded bg-surface-container text-on-surface-variant text-xs">Marketing</span>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[rgba(79,70,229,0.1)] text-[#4f46e5]">PJ</span>
+</td>
+<td class="px-6 py-4 text-right text-error font-mono-sm">- R$ 300,00</td>
+</tr>
+<!-- Row 4 PJ -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-6 py-4 text-on-surface-variant font-mono-sm">18/10/2023</td>
+<td class="px-6 py-4 font-medium">Assinatura Zoom</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2 py-1 rounded bg-surface-container text-on-surface-variant text-xs">Ferramentas</span>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[rgba(79,70,229,0.1)] text-[#4f46e5]">PJ</span>
+</td>
+<td class="px-6 py-4 text-right text-error font-mono-sm">- R$ 89,90</td>
+</tr>
+<!-- Row 5 PF -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-6 py-4 text-on-surface-variant font-mono-sm">15/10/2023</td>
+<td class="px-6 py-4 font-medium">Conta de Internet Residencial</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2 py-1 rounded bg-surface-container text-on-surface-variant text-xs">Internet</span>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[rgba(0,106,97,0.1)] text-[#006a61]">PF</span>
+</td>
+<td class="px-6 py-4 text-right text-error font-mono-sm">- R$ 120,00</td>
+</tr>
+<!-- Row 6 PJ -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-6 py-4 text-on-surface-variant font-mono-sm">10/10/2023</td>
+<td class="px-6 py-4 font-medium">DAS (Simples Nacional)</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2 py-1 rounded bg-surface-container text-on-surface-variant text-xs">Impostos</span>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[rgba(79,70,229,0.1)] text-[#4f46e5]">PJ</span>
+</td>
+<td class="px-6 py-4 text-right text-error font-mono-sm">- R$ 450,00</td>
+</tr>
+</tbody>
+</table>
+<!-- Pagination -->
+<div class="px-6 py-4 border-t border-outline-variant flex items-center justify-between">
+<span class="text-body-md text-on-surface-variant">Mostrando 1 a 6 de 24 registros</span>
+<div class="flex items-center gap-2">
+<button class="w-8 h-8 flex items-center justify-center border border-outline-variant rounded text-on-surface-variant hover:bg-surface-container transition-colors" disabled="">
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center bg-primary-container/10 border border-primary rounded text-primary font-label-md">1</button>
+<button class="w-8 h-8 flex items-center justify-center border border-outline-variant rounded text-on-surface-variant hover:bg-surface-container transition-colors font-label-md">2</button>
+<button class="w-8 h-8 flex items-center justify-center border border-outline-variant rounded text-on-surface-variant hover:bg-surface-container transition-colors font-label-md">3</button>
+<button class="w-8 h-8 flex items-center justify-center border border-outline-variant rounded text-on-surface-variant hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

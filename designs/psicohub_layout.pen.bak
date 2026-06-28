@@ -1,0 +1,13 @@
+{
+  "type": "document",
+  "version": "1.0",
+  "name": "PsicoHub Layout",
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Dashboard",
+      "width": 1440,
+      "height": 900
+    }
+  ]
+}

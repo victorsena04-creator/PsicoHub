@@ -1,0 +1,26 @@
+# Arquivos de ambiente
+.env
+
+# Banco de dados local
+*.db
+psicohub.db
+
+# Distribuição / Instalador
+dist/
+build/
+*.exe
+
+# Arquivos temporários
+.tmp/
+
+# Arquivos de sistema
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# Arquivos de IDE
+.vscode/
+.idea/
+*.swp
+*.swo
