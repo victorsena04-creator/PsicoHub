@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "electron-dev": "electron .",
-    "dist": "npm rebuild better-sqlite3 && npm run build && electron-builder && powershell -Command \"New-Item -ItemType Directory -Path dist -Force; Copy-Item 'C:/Users/victo/AppData/Local/Temp/psicohub-build/PsicoHub Setup 0.1.0.exe' -Destination 'dist/PsicoHub Setup 0.1.0.exe' -Force\""
+    "dist": "npm rebuild better-sqlite3 && npm run build && electron-builder && powershell -Command \"New-Item -ItemType Directory -Path dist -Force; Copy-Item 'C:/Users/victo/AppData/Local/Temp/psicohub-build/PsicoHub Setup *.exe' -Destination 'dist/' -Force\""
   },
   "dependencies": {
     "@google/stitch-sdk": "^0.3.5",

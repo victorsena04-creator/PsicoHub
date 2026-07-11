@@ -70,16 +70,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
         {/* Barra de Navegação Superior (TopNavBar) */}
         <header className="h-16 bg-surface border-b border-outline-variant flex justify-end items-center px-8 w-full z-40 sticky top-0">
-          {/* Ações de Usuário (Ajustes de Configurações) */}
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setShowSettingsModal(true)}
-              className="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-container-high scale-95 active:scale-90 transition-transform cursor-pointer"
-              title="Configurações do Sistema"
-            >
-              <span className="material-symbols-outlined">settings</span>
-            </button>
-          </div>
+          {/* O menu de Ajustes foi movido para a barra lateral lateral para facilitar o acesso */}
         </header>
 
         {/* Conteúdo Dinâmico das Páginas */}

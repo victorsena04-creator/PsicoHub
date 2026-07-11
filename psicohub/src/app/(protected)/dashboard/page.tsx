@@ -23,8 +23,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   // Pegar mês e ano correntes ou vindo dos filtros da URL
   const now = new Date();
-  const mes = searchParams.mes !== undefined ? searchParams.mes : String(now.getMonth() + 1).padStart(2, '0');
-  const ano = searchParams.ano !== undefined ? searchParams.ano : String(now.getFullYear());
+  const mes = searchParams.mes !== undefined ? String(searchParams.mes).padStart(2, '0') : String(now.getMonth() + 1).padStart(2, '0');
+  const ano = searchParams.ano !== undefined ? String(searchParams.ano) : String(now.getFullYear());
 
   const mesNum = mes ? parseInt(mes) : 0;
   const anoNum = ano ? parseInt(ano) : 0;
@@ -79,16 +79,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const resAReceber = db.prepare(queryAReceber).get() as { total: number | null };
   const aReceber = resAReceber?.total || 0;
 
-  // 4. Previsto (Recebimentos esperados para o período)
-  const pd = whereDate("data_vencimento");
-  const queryPrevisto = `
-    SELECT SUM(valor) as total FROM recebimentos 
-    WHERE data_vencimento IS NOT NULL
-      ${tipoContaFiltro ? `AND tipo_conta = '${tipoContaFiltro}'` : ''}
-      ${pd.sql}
-  `;
-  const resPrevisto = db.prepare(queryPrevisto).get(pd.params) as { total: number | null };
-  const previsto = resPrevisto?.total || 0;
+  // 4. Previsto (Consultas agendadas ou realizadas no período) - Exclusivo PJ / Consolidado
+  let previsto = 0;
+  if (filtro === "consolidado" || filtro === "pj") {
+    const pd = whereDate("data_hora");
+    const queryPrevisto = `
+      SELECT SUM(valor) as total FROM consultas 
+      WHERE status IN ('agendada', 'realizada')
+        ${pd.sql}
+    `;
+    const resPrevisto = db.prepare(queryPrevisto).get(pd.params) as { total: number | null };
+    previsto = resPrevisto?.total || 0;
+  }
 
   // 5. Despesas (Gasto total no período)
   const dd = whereDate("data");
@@ -134,7 +136,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const totalComparecimento = realizadas + faltas;
   const taxaComparecimento = totalComparecimento > 0 
     ? Math.round((realizadas / totalComparecimento) * 100)
-    : 100;
+    : 0;
 
   // --- METAS E TETOS DO MÊS ---
   let metasSql = "SELECT meta_prolabore, meta_despesas FROM metas WHERE 1=1";

@@ -24,3 +24,10 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Arquivos temporários do SQLite WAL
+*.db-wal
+*.db-shm
+
+# Credenciais secretas de desenvolvedor do Google
+client_secret_*.json

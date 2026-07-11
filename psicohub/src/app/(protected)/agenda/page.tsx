@@ -2,6 +2,7 @@ import db from "@/lib/db";
 import { KanbanBoard } from "@/components/agenda/KanbanBoard";
 import Link from "next/link";
 import { MesFiltroHeader } from "@/components/shared/MesFiltroHeader";
+import { gerarConsultasRecorrentesParaSemana } from "@/lib/agendaRecorrente";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,9 @@ export default async function AgendaPage({ searchParams }: PageProps) {
   const segundaFeira = new Date(dataReferencia);
   segundaFeira.setDate(dataReferencia.getDate() + diffSegunda);
   segundaFeira.setHours(0, 0, 0, 0);
+
+  // Auto-gerar consultas recorrentes configuradas na agenda base para a semana atual
+  gerarConsultasRecorrentesParaSemana(segundaFeira);
 
   // Gerar as datas de Segunda a Sexta daquela semana
   const diasSemana = [];

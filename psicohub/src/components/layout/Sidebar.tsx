@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { NovoAgendamentoModal } from "@/components/agenda/NovoAgendamentoModal";
+import { SettingsModal } from "./SettingsModal";
 
 // Lista de itens do menu lateral básico
 const baseMenuItems = [
@@ -21,6 +22,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [session, setSession] = useState<{ username: string; role: string } | null>(null);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   // Ler o cookie de informações do usuário no client-side após a montagem (evita erros de hidratação)
   useEffect(() => {
@@ -105,14 +107,23 @@ export function Sidebar() {
         })}
       </div>
 
-      {/* Rodapé da Sidebar (Informações do Usuário & Logout) */}
-      <div className="px-md pt-md border-t border-outline-variant mt-auto">
+      {/* Rodapé da Sidebar (Informações do Usuário, Ajustes & Logout) */}
+      <div className="px-md pt-md border-t border-outline-variant mt-auto flex flex-col gap-1">
         {isSuporte && (
-          <div className="flex items-center gap-md mb-3 px-sm">
+          <div className="flex items-center gap-md mb-2 px-sm">
             <span className="material-symbols-outlined text-primary text-[20px]">build</span>
             <div className="text-xs font-semibold text-primary">Suporte Técnico</div>
           </div>
         )}
+        
+        <button
+          onClick={() => setShowSettingsModal(true)}
+          className="w-full flex items-center gap-md text-on-surface-variant hover:text-primary px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-left cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-[20px]">settings</span>
+          Ajustes do Aplicativo
+        </button>
+
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-md text-on-surface-variant hover:text-error px-md py-sm rounded-lg hover:bg-error-container/10 transition-colors font-label-md text-left cursor-pointer"
@@ -120,6 +131,9 @@ export function Sidebar() {
           <span className="material-symbols-outlined text-[20px]">logout</span>
           Sair do Sistema
         </button>
+
+        {/* Modal de Configurações Administrativas */}
+        <SettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
       </div>
     </nav>
   );

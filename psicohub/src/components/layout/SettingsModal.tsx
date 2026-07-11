@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 interface SettingsModalProps {
@@ -23,6 +23,70 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetPass1, setResetPass1] = useState("");
   const [resetPass2, setResetPass2] = useState("");
+
+  // Estados de integração do Google Agenda
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [refreshToken, setRefreshToken] = useState("");
+  const [calendarId, setCalendarId] = useState("primary");
+  const [configurado, setConfigurado] = useState(false);
+
+  // Carregar as configurações quando o modal abrir
+  useEffect(() => {
+    if (isOpen) {
+      const fetchGoogleConfig = async () => {
+        try {
+          const res = await fetch("/api/integracoes/google-calendar/config");
+          const data = await res.json();
+          if (data.success) {
+            setClientId(data.data.clientId);
+            setClientSecret(data.data.clientSecret);
+            setRefreshToken(data.data.refreshToken);
+            setCalendarId(data.data.calendarId);
+            setConfigurado(data.data.configurado);
+          }
+        } catch (err) {
+          console.error("Erro ao carregar dados do Google Agenda:", err);
+        }
+      };
+      fetchGoogleConfig();
+    }
+  }, [isOpen]);
+
+  const handleConnectGoogle = () => {
+    window.open("/api/integracoes/google-calendar/login", "_blank");
+  };
+
+  const handleDisconnectGoogle = async () => {
+    if (!confirm("Você tem certeza que deseja desconectar o Google Agenda? Seus atendimentos locais não serão mais integrados com a agenda do celular.")) {
+      return;
+    }
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/integracoes/google-calendar/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "desconectar" }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Erro ao desconectar Google Agenda.");
+      }
+
+      setSuccess("Google Agenda desconectado com sucesso!");
+      setConfigurado(false);
+      setTimeout(() => setSuccess(""), 3000);
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message || "Falha ao desconectar.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -195,6 +259,46 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 </button>
               </div>
             </form>
+          </div>
+
+          <hr className="border-outline-variant/60" />
+
+          {/* Seção 3: Conexão com Google Agenda */}
+          <div>
+            <h4 className="font-label-md text-label-md font-bold text-on-surface mb-2 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-sm text-primary">calendar_month</span>
+              Conexão Google Agenda {configurado && <span className="text-[10px] bg-secondary-container/20 text-secondary border border-secondary/20 px-1.5 py-0.2 rounded font-semibold ml-1">Ativo</span>}
+            </h4>
+            <p className="text-[11px] text-on-surface-variant leading-relaxed mb-4">
+              Sincronize sua agenda do celular com o PsicoHub de forma bidirecional. Seus atendimentos aparecerão na agenda do Google e modificações feitas lá atualizarão o aplicativo local.
+            </p>
+            
+            {!configurado ? (
+              <button
+                type="button"
+                onClick={handleConnectGoogle}
+                disabled={loading}
+                className="w-full bg-primary hover:bg-primary/95 text-on-primary font-bold text-xs py-2 px-4 rounded-lg shadow-sm transition-colors cursor-pointer text-center flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">link</span>
+                Conectar Google Agenda
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-3 bg-secondary-container/10 border border-secondary/20 rounded-lg text-[11px] text-on-surface-variant flex items-center gap-2">
+                  <span className="material-symbols-outlined text-secondary">check_circle</span>
+                  <span><strong>Sua agenda está conectada!</strong> Modificações locais e no celular já estão integradas.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDisconnectGoogle}
+                  disabled={loading}
+                  className="w-full py-1.5 text-center text-xs font-semibold text-error hover:bg-error-container/10 border border-error/35 hover:border-error rounded-lg transition-all cursor-pointer"
+                >
+                  Desconectar Conta do Google
+                </button>
+              </div>
+            )}
           </div>
 
           <hr className="border-outline-variant/60" />

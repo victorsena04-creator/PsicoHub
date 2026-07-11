@@ -7,7 +7,30 @@ declare global {
   var _sqliteDb: Database.Database | undefined;
 }
 
-const DB_PATH = path.join(process.cwd(), 'psicohub.db');
+let DB_PATH: string;
+
+if (process.env.NODE_ENV === 'production') {
+  // Em produção, vamos salvar na pasta AppData/Application Support do sistema
+  // para evitar que o instalador do Electron limpe os dados nas atualizações.
+  let appDataDir = '';
+  if (process.platform === 'win32') {
+    appDataDir = process.env.APPDATA || path.join(process.env.USERPROFILE || '', 'AppData', 'Roaming');
+  } else if (process.platform === 'darwin') {
+    appDataDir = path.join(process.env.HOME || '', 'Library', 'Application Support');
+  } else {
+    appDataDir = path.join(process.env.HOME || '', '.config');
+  }
+
+  const targetFolder = path.join(appDataDir, 'PsicoHub');
+  if (!fs.existsSync(targetFolder)) {
+    fs.mkdirSync(targetFolder, { recursive: true });
+  }
+  DB_PATH = path.join(targetFolder, 'psicohub.db');
+} else {
+  // Em desenvolvimento, mantém local na raiz do projeto
+  DB_PATH = path.join(process.cwd(), 'psicohub.db');
+}
+
 const SCHEMA_PATH = path.join(process.cwd(), 'database', 'schema.sql');
 
 let db: Database.Database;
@@ -22,6 +45,8 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 db.pragma('foreign_keys = ON');
+db.pragma('journal_mode = WAL');
+db.pragma('busy_timeout = 5000');
 
 /**
  * Semeia o banco de dados com registros fictícios de demonstração caso o banco esteja vazio.
@@ -196,6 +221,19 @@ export function initDb() {
       db.exec(schema);
       console.log('✅ Banco de dados SQLite inicializado.');
       
+      // Criar a tabela de configurações chave-valor se não existir
+      try {
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS configuracoes_sistema (
+            chave TEXT PRIMARY KEY,
+            valor TEXT
+          )
+        `).run();
+        console.log("✅ Tabela 'configuracoes_sistema' criada com sucesso.");
+      } catch (e) {
+        console.error("🚨 Erro ao criar tabela configuracoes_sistema:", e);
+      }
+      
       // Migração dinâmica: adicionar coluna categoria à tabela recebimentos se não existir
       try {
         db.prepare("ALTER TABLE recebimentos ADD COLUMN categoria TEXT").run();
@@ -204,6 +242,17 @@ export function initDb() {
         // Ignora se a coluna já existir (o SQLite lançará erro de coluna duplicada)
         if (!e.message.includes("duplicate column name")) {
           console.error("🚨 Erro ao rodar migração em recebimentos:", e);
+        }
+      }
+
+      // Migração dinâmica: adicionar coluna google_event_id à tabela consultas se não existir
+      try {
+        db.prepare("ALTER TABLE consultas ADD COLUMN google_event_id TEXT").run();
+        console.log("✅ Coluna 'google_event_id' adicionada à tabela consultas com sucesso.");
+      } catch (e: any) {
+        // Ignora se a coluna já existir
+        if (!e.message.includes("duplicate column name")) {
+          console.error("🚨 Erro ao rodar migração de google_event_id em consultas:", e);
         }
       }
 
@@ -218,6 +267,10 @@ export function initDb() {
   }
 }
 
-initDb();
+// Não inicializar ou rodar migrações concorrentes durante o build do Next.js.
+// O banco será inicializado dinamicamente no primeiro acesso em tempo de execução (runtime).
+if (process.env.NEXT_PHASE !== 'phase-production-build') {
+  initDb();
+}
 
 export default db;

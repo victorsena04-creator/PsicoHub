@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import crypto from "crypto";
+import { criarEventoAgenda, atualizarEventoAgenda } from "@/lib/googleCalendar";
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +54,27 @@ export async function POST(request: Request) {
       e_excecao ? 1 : 0
     );
 
+    // Buscar dados do paciente para sincronizar com o Google Agenda
+    const pacienteObj = db.prepare("SELECT nome FROM pacientes WHERE id = ?").get(paciente_id) as { nome: string } | undefined;
+    
+    // Tentar criar evento no Google Agenda de forma assíncrona
+    if (pacienteObj) {
+      try {
+        const googleEventId = await criarEventoAgenda({
+          paciente_nome: pacienteObj.nome,
+          data_hora: data_hora.trim(),
+          valor: valorCobrado
+        });
+        
+        if (googleEventId) {
+          db.prepare("UPDATE consultas SET google_event_id = ? WHERE id = ?").run(googleEventId, id);
+          console.log(`✅ Consulta associada ao evento do Google Agenda: ${googleEventId}`);
+        }
+      } catch (gErr) {
+        console.warn("⚠️ Falha ao criar compromisso no Google Agenda:", gErr);
+      }
+    }
+
     console.log(`✅ Consulta cadastrada com sucesso para o paciente ${paciente_id} em ${data_hora}.`);
     return NextResponse.json({ success: true, id });
 
@@ -78,11 +100,33 @@ export async function PUT(request: Request) {
       );
     }
 
+    // Buscar dados antes de atualizar para atualizar também no Google Agenda
+    const consultaAntes = db.prepare(`
+      SELECT c.valor, c.status, c.google_event_id, p.nome as paciente_nome
+      FROM consultas c
+      JOIN pacientes p ON c.paciente_id = p.id
+      WHERE c.id = ?
+    `).get(consultaId) as { valor: number; status: string; google_event_id: string | null; paciente_nome: string } | undefined;
+
     // Atualizar no banco SQLite
     db.prepare("UPDATE consultas SET data_hora = ? WHERE id = ?").run(
       novaDataHora.trim(),
       consultaId
     );
+
+    // Se já possuía evento na Google Agenda, atualiza-o
+    if (consultaAntes && consultaAntes.google_event_id) {
+      try {
+        await atualizarEventoAgenda(consultaAntes.google_event_id, {
+          paciente_nome: consultaAntes.paciente_nome,
+          data_hora: novaDataHora.trim(),
+          valor: consultaAntes.valor,
+          status: consultaAntes.status
+        });
+      } catch (gErr) {
+        console.warn("⚠️ Falha ao atualizar evento correspondente no Google Agenda:", gErr);
+      }
+    }
 
     console.log(`🔄 Consulta ${consultaId} movida para ${novaDataHora}.`);
     return NextResponse.json({ success: true });

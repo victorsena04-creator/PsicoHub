@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS consultas (
   valor REAL NOT NULL, -- Valor cobrado pela consulta específica
   status TEXT CHECK (status IN ('agendada', 'realizada', 'cancelada', 'falta')) DEFAULT 'agendada', -- Situação do atendimento
   e_excecao INTEGER DEFAULT 0, -- Indica se foi um agendamento fora do padrão (1=Exceção, 0=Normal)
+  google_event_id TEXT, -- Identificador do evento correspondente no Google Agenda
   created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
