@@ -1,9 +1,11 @@
-import db from "@/lib/db";
 import Link from "next/link";
 import { NovoLancamentoModal } from "@/components/financeiro/NovoLancamentoModal";
 import { LancamentosTable } from "@/components/financeiro/LancamentosTable";
 import { GraficosDashboard } from "@/components/financeiro/GraficosDashboard";
 import { MesFiltroHeader } from "@/components/shared/MesFiltroHeader";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,11 @@ interface Lancamento {
 }
 
 export default async function FinanceiroPage({ searchParams }: PageProps) {
+  const sessao = obterSessao();
+  if (!sessao) {
+    redirect("/login");
+  }
+
   // Filtros da URL
   const filtro = searchParams.filtro || "consolidado";
   const busca = searchParams.busca || "";
@@ -38,146 +45,126 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
 
   const tipoContaFiltro = filtro === "consolidado" ? null : filtro.toUpperCase();
 
-  // Filtros SQL dinâmicos baseados no Mês e Ano
-  let dateFilterRecebimentos = "";
-  let dateFilterDespesas = "";
-  const queryParamsRecebimentos: any[] = [];
-  const queryParamsDespesas: any[] = [];
+  // --- QUERIES NO CLOUD FIRESTORE (Executadas em paralelo) ---
+  const [recebimentosSnapshot, despesasSnapshot, pacientesSnapshot] = await Promise.all([
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("recebimentos").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("despesas").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("pacientes").get()
+  ]);
 
-  if (mes) {
-    dateFilterRecebimentos += " AND strftime('%m', data_pagamento) = ?";
-    dateFilterDespesas += " AND strftime('%m', data) = ?";
-    queryParamsRecebimentos.push(mes);
-    queryParamsDespesas.push(mes);
-  }
-  if (ano) {
-    dateFilterRecebimentos += " AND strftime('%Y', data_pagamento) = ?";
-    dateFilterDespesas += " AND strftime('%Y', data) = ?";
-    queryParamsRecebimentos.push(ano);
-    queryParamsDespesas.push(ano);
-  }
+  const recebimentos = recebimentosSnapshot.docs.map(doc => doc.data() as any);
+  const despesasData = despesasSnapshot.docs.map(doc => doc.data() as any);
+  const pacientesMap = new Map(pacientesSnapshot.docs.map(doc => [doc.id, doc.data() as any]));
 
-  // --- QUERIES DOS INDICADORES FINANCEIROS ---
+  // --- PROCESSAMENTO NO SERVIDOR (JS IN-MEMORY) ---
+
+  const filtrarPorMesAno = (dataStr: string) => {
+    if (!dataStr) return false;
+    const datePart = dataStr.split(" ")[0]; // Pega YYYY-MM-DD
+    const [cAno, cMes] = datePart.split("-");
+    return cAno === ano && cMes === mes;
+  };
 
   // 1. Entradas no mês/período selecionado
-  const queryEntradas = `
-    SELECT SUM(valor) as total FROM recebimentos 
-    WHERE status = 'pago' AND data_pagamento IS NOT NULL
-      ${tipoContaFiltro ? `AND tipo_conta = '${tipoContaFiltro}'` : ''}
-      ${dateFilterRecebimentos}
-  `;
-  const resEntradas = db.prepare(queryEntradas).get(queryParamsRecebimentos) as { total: number | null };
-  const entradasTotal = resEntradas?.total || 0;
+  const entradasFiltradas = recebimentos.filter(r => {
+    const matchStatus = r.status === "pago" && r.data_pagamento;
+    const matchTipo = tipoContaFiltro ? r.tipo_conta === tipoContaFiltro : true;
+    const matchData = r.data_pagamento ? filtrarPorMesAno(r.data_pagamento) : false;
+    return matchStatus && matchTipo && matchData;
+  });
+  const entradasTotal = entradasFiltradas.reduce((sum, r) => sum + (r.valor || 0), 0);
 
   // 2. Saídas no mês/período selecionado
-  const querySaidas = `
-    SELECT SUM(valor) as total FROM despesas 
-    WHERE 1=1
-      ${tipoContaFiltro ? `AND tipo_conta = '${tipoContaFiltro}'` : ''}
-      ${dateFilterDespesas}
-  `;
-  const resSaidas = db.prepare(querySaidas).get(queryParamsDespesas) as { total: number | null };
-  const saidasTotal = resSaidas?.total || 0;
+  const saidasFiltradas = despesasData.filter(d => {
+    const matchTipo = tipoContaFiltro ? d.tipo_conta === tipoContaFiltro : true;
+    const matchData = d.data ? filtrarPorMesAno(d.data) : false;
+    return matchTipo && matchData;
+  });
+  const saidasTotal = saidasFiltradas.reduce((sum, d) => sum + (d.valor || 0), 0);
 
-  // 3. Saldo Atual (Entradas - Saídas acumuladas gerais do banco)
-  // Para ser realista, o Saldo Acumulado soma todas as entradas pagas menos todas as despesas da conta selecionada
-  const queryEntradasGerais = `
-    SELECT SUM(valor) as total FROM recebimentos 
-    WHERE status = 'pago'
-      ${tipoContaFiltro ? `AND tipo_conta = '${tipoContaFiltro}'` : ''}
-  `;
-  const querySaidasGerais = `
-    SELECT SUM(valor) as total FROM despesas 
-    ${tipoContaFiltro ? `WHERE tipo_conta = '${tipoContaFiltro}'` : ''}
-  `;
-  const resEntradasGerais = db.prepare(queryEntradasGerais).get() as { total: number | null };
-  const resSaidasGerais = db.prepare(querySaidasGerais).get() as { total: number | null };
-  
-  const saldoTotal = (resEntradasGerais?.total || 0) - (resSaidasGerais?.total || 0);
+  // 3. Saldo Atual Geral (Todas as Entradas pagas - Todas as Saídas do caixa selecionado)
+  const entradasGeraisTotal = recebimentos
+    .filter(r => r.status === "pago" && (tipoContaFiltro ? r.tipo_conta === tipoContaFiltro : true))
+    .reduce((sum, r) => sum + (r.valor || 0), 0);
 
-  // --- QUERIES DE GRÁFICOS E AGREGADOS ---
-  // 1. Entradas no período selecionado (já calculado via queryEntradas)
-  const entradasPeriodoTotal = entradasTotal;
+  const saidasGeraisTotal = despesasData
+    .filter(d => (tipoContaFiltro ? d.tipo_conta === tipoContaFiltro : true))
+    .reduce((sum, d) => sum + (d.valor || 0), 0);
 
-  // 2. Saídas no período selecionado (já calculado via querySaidas)
-  const saidasPeriodoTotal = saidasTotal;
+  const saldoTotal = entradasGeraisTotal - saidasGeraisTotal;
 
-  const saldoPeriodoTotal = entradasPeriodoTotal - saidasPeriodoTotal;
+  const saldoPeriodoTotal = entradasTotal - saidasTotal;
 
-  // 3. Despesas agrupadas por categoria no período selecionado
-  const queryDespesasCategorias = `
-    SELECT categoria, SUM(valor) as total FROM despesas
-    WHERE 1=1
-      ${tipoContaFiltro ? `AND tipo_conta = '${tipoContaFiltro}'` : ''}
-      ${dateFilterDespesas}
-    GROUP BY categoria
-    ORDER BY total DESC
-  `;
-  const despesasCategorias = db.prepare(queryDespesasCategorias).all(queryParamsDespesas) as { categoria: string; total: number }[];
+  // 4. Despesas agrupadas por categoria no período selecionado
+  const despesasPorCategoria: Record<string, number> = {};
+  saidasFiltradas.forEach(d => {
+    const cat = d.categoria || "outros";
+    despesasPorCategoria[cat] = (despesasPorCategoria[cat] || 0) + (d.valor || 0);
+  });
+  const despesasCategorias = Object.keys(despesasPorCategoria).map(cat => ({
+    categoria: cat,
+    total: despesasPorCategoria[cat]
+  }));
+  despesasCategorias.sort((a, b) => b.total - a.total);
 
-  // 4. Receitas agrupadas por categoria no período selecionado
-  const queryReceitasCategorias = `
-    SELECT COALESCE(categoria, 'atendimento') as categoria, SUM(valor) as total FROM recebimentos
-    WHERE status = 'pago' AND data_pagamento IS NOT NULL
-      ${tipoContaFiltro ? `AND tipo_conta = '${tipoContaFiltro}'` : ''}
-      ${dateFilterRecebimentos}
-    GROUP BY categoria
-    ORDER BY total DESC
-  `;
-  const receitasCategorias = db.prepare(queryReceitasCategorias).all(queryParamsRecebimentos) as { categoria: string; total: number }[];
+  // 5. Receitas agrupadas por categoria no período selecionado
+  const receitasPorCategoria: Record<string, number> = {};
+  entradasFiltradas.forEach(r => {
+    const cat = r.categoria || "atendimento";
+    receitasPorCategoria[cat] = (receitasPorCategoria[cat] || 0) + (r.valor || 0);
+  });
+  const receitasCategorias = Object.keys(receitasPorCategoria).map(cat => ({
+    categoria: cat,
+    total: receitasPorCategoria[cat]
+  }));
+  receitasCategorias.sort((a, b) => b.total - a.total);
 
-  const queryLancamentos = `
-    SELECT * FROM (
-      SELECT 
-        'entrada' as direcao,
-        r.id,
-        r.data_pagamento as data,
-        'Consulta - ' || COALESCE(p.nome, 'Lançamento Avulso (Extrato)') as descricao,
-        COALESCE(r.categoria, 'atendimento') as categoria,
-        r.tipo_conta,
-        r.valor
-      FROM recebimentos r
-      LEFT JOIN pacientes p ON r.paciente_id = p.id
-      WHERE r.status = 'pago' AND r.data_pagamento IS NOT NULL
-      
-      UNION ALL
-      
-      SELECT 
-        'saida' as direcao,
-        d.id,
-        d.data as data,
-        d.descricao,
-        d.categoria,
-        d.tipo_conta,
-        d.valor
-      FROM despesas d
-    )
-    WHERE 1=1
-      ${tipoContaFiltro ? `AND tipo_conta = '${tipoContaFiltro}'` : ''}
-      ${busca ? `AND (descricao LIKE '%${busca}%' OR categoria LIKE '%${busca}%')` : ''}
-      ${mes ? "AND strftime('%m', data) = ?" : ""}
-      ${ano ? "AND strftime('%Y', data) = ?" : ""}
-    ORDER BY data DESC
-  `;
+  // 6. União de Lançamentos (UNION ALL simulado)
+  const listEntradas = recebimentos
+    .filter(r => r.status === "pago" && r.data_pagamento)
+    .map(r => {
+      const pac = r.paciente_id ? pacientesMap.get(r.paciente_id) : null;
+      return {
+        direcao: "entrada" as const,
+        id: r.id,
+        data: r.data_pagamento,
+        descricao: `Consulta - ${pac?.nome || "Lançamento Avulso (Extrato)"}`,
+        categoria: r.categoria || "atendimento",
+        tipo_conta: r.tipo_conta as "PF" | "PJ",
+        valor: r.valor || 0
+      };
+    });
 
-  // Mapear parâmetros da query UNION ALL
-  const queryParamsLancamentos: any[] = [];
-  if (mes) queryParamsLancamentos.push(mes);
-  if (ano) queryParamsLancamentos.push(ano);
+  const listSaidas = despesasData.map(d => ({
+    direcao: "saida" as const,
+    id: d.id,
+    data: d.data,
+    descricao: d.descricao,
+    categoria: d.categoria || "outros",
+    tipo_conta: d.tipo_conta as "PF" | "PJ",
+    valor: d.valor || 0
+  }));
 
-  const lancamentos = db.prepare(queryLancamentos).all(queryParamsLancamentos) as Lancamento[];
+  // Combinar e aplicar filtros finais (tipo_conta, busca, mes/ano)
+  let lancamentos = [...listEntradas, ...listSaidas];
 
-  // Mapeador de categorias em português para ficar visualmente polido
-  const categoriasMap: { [key: string]: string } = {
-    aluguel: "Aluguel / Sala",
-    internet: "Internet / Telefone",
-    marketing: "Marketing / Ads",
-    impostos: "Impostos / DAS",
-    ferramentas: "Ferramentas / Apps",
-    alimentacao: "Alimentação",
-    outros: "Outros Gastos",
-    Atendimento: "Atendimento Clínico",
-  };
+  lancamentos = lancamentos.filter(l => {
+    const matchTipo = tipoContaFiltro ? l.tipo_conta === tipoContaFiltro : true;
+    const matchData = l.data ? filtrarPorMesAno(l.data) : false;
+    
+    let matchBusca = true;
+    if (busca) {
+      const buscaLower = busca.toLowerCase();
+      const descLower = (l.descricao || "").toLowerCase();
+      const catLower = (l.categoria || "").toLowerCase();
+      matchBusca = descLower.includes(buscaLower) || catLower.includes(buscaLower);
+    }
+
+    return matchTipo && matchData && matchBusca;
+  });
+
+  // Ordenar decrescente por data
+  lancamentos.sort((a, b) => b.data.localeCompare(a.data));
 
   return (
     <div className="w-full">
@@ -285,10 +272,10 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      {/* Seção de Gráficos Analíticos Dinâmicos (Visualização Premium Stitch) */}
+      {/* Seção de Gráficos Analíticos Dinâmicos */}
       <GraficosDashboard
-        entradasTotal={entradasPeriodoTotal}
-        saidasTotal={saidasPeriodoTotal}
+        entradasTotal={entradasTotal}
+        saidasTotal={saidasTotal}
         saldoTotal={saldoPeriodoTotal}
         despesasCategorias={despesasCategorias}
         receitasCategorias={receitasCategorias}
@@ -297,9 +284,7 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
 
       {/* Barra de Filtros e Busca Simplificada */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 mb-6">
-        {/* Formulário de Busca Simples na URL */}
         <form method="GET" className="relative w-full">
-          {/* Preservar outros filtros */}
           <input type="hidden" name="filtro" value={filtro} />
           {mes && <input type="hidden" name="mes" value={mes} />}
           {ano && <input type="hidden" name="ano" value={ano} />}

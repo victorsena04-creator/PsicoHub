@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
-import crypto from "crypto";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+
+export const dynamic = 'force-dynamic';
 
 /**
- * API para cadastrar uma nova despesa manual (saída de caixa) no SQLite local.
+ * API para cadastrar uma nova despesa manual no Firestore (Multi-Tenant).
  * Suporta despesas em conta corrente e compras no cartão de crédito com cálculo de fatura.
  */
 export async function POST(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const {
       descricao,
@@ -27,18 +37,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const id = crypto.randomUUID();
     let faturaMes: number | null = null;
     let faturaAno: number | null = null;
 
     // Se o pagamento for via cartão de crédito, calculamos o mês/ano da fatura correspondente
     if (meio_pagamento === "cartao_credito" && cartao_id) {
-      // Buscar as regras do cartão de crédito cadastrado
-      const cartao = db.prepare(
-        "SELECT dia_fechamento FROM cartoes_credito WHERE id = ?"
-      ).get(cartao_id) as { dia_fechamento: number } | undefined;
+      // Buscar as regras do cartão de crédito cadastrado no Firestore
+      const cartaoDoc = await firestore
+        .collection("consultorios")
+        .doc(sessao.consultorioId)
+        .collection("cartoes_credito")
+        .doc(cartao_id)
+        .get();
 
-      if (!cartao) {
+      const cartao = cartaoDoc.data();
+
+      if (!cartaoDoc.exists || !cartao) {
         return NextResponse.json(
           { success: false, error: "Cartão de crédito selecionado não encontrado." },
           { status: 404 }
@@ -63,25 +77,30 @@ export async function POST(request: Request) {
       faturaAno = ano;
     }
 
-    // Inserir no banco de dados SQLite local
-    db.prepare(`
-      INSERT INTO despesas (id, descricao, valor, data, categoria, origem, tipo_conta, meio_pagamento, cartao_id, fatura_mes, fatura_ano)
-      VALUES (?, ?, ?, ?, ?, 'manual', ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      descricao,
-      parseFloat(valor),
-      data,
-      categoria || "outros",
-      tipo_conta,
-      meio_pagamento || "conta_corrente",
-      cartao_id || null,
-      faturaMes,
-      faturaAno
-    );
+    // Inserir no Firestore
+    const despesaRef = firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("despesas")
+      .doc();
 
-    console.log(`✅ Despesa "${descricao}" de R$ ${valor} registrada.`);
-    return NextResponse.json({ success: true, id });
+    await despesaRef.set({
+      id: despesaRef.id,
+      descricao,
+      valor: parseFloat(valor),
+      data,
+      categoria: categoria || "outros",
+      origem: "manual",
+      tipo_conta,
+      meio_pagamento: meio_pagamento || "conta_corrente",
+      cartao_id: cartao_id || null,
+      fatura_mes: faturaMes,
+      fatura_ano: faturaAno,
+      created_at: new Date().toISOString()
+    });
+
+    console.log(`✅ Despesa "${descricao}" de R$ ${valor} registrada no Firestore.`);
+    return NextResponse.json({ success: true, id: despesaRef.id });
   } catch (error: any) {
     console.error("🚨 Erro na API de cadastro de despesa:", error);
     return NextResponse.json(
@@ -93,6 +112,14 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { despesaId, campo, valor, atualizarTodasPorNome } = body;
 
@@ -133,30 +160,57 @@ export async function PUT(request: Request) {
 
     if (atualizarTodasPorNome) {
       // Buscar a descrição da despesa atual para saber qual nome atualizar
-      const despesa = db.prepare("SELECT descricao FROM despesas WHERE id = ?").get(despesaId) as { descricao: string } | undefined;
+      const despesaRef = firestore
+        .collection("consultorios")
+        .doc(sessao.consultorioId)
+        .collection("despesas")
+        .doc(despesaId);
+
+      const despesaDoc = await despesaRef.get();
+      const despesa = despesaDoc.data();
       
-      if (!despesa) {
+      if (!despesaDoc.exists || !despesa) {
         return NextResponse.json(
           { success: false, error: "Despesa não encontrada." },
           { status: 404 }
         );
       }
 
-      db.prepare(`
-        UPDATE despesas
-        SET ${campo} = ?
-        WHERE descricao = ?
-      `).run(valor, despesa.descricao);
+      // Buscar todas as despesas com a mesma descrição no Firestore
+      const despesasSnapshot = await firestore
+        .collection("consultorios")
+        .doc(sessao.consultorioId)
+        .collection("despesas")
+        .where("descricao", "==", despesa.descricao)
+        .get();
 
-      console.log(`✅ Todas as despesas com descrição "${despesa.descricao}" atualizadas inline: ${campo} -> ${valor}`);
+      const batch = firestore.batch();
+      despesasSnapshot.docs.forEach(doc => {
+        batch.update(doc.ref, { [campo]: valor });
+      });
+      await batch.commit();
+
+      console.log(`✅ Todas as despesas com descrição "${despesa.descricao}" atualizadas no Firestore: ${campo} -> ${valor}`);
     } else {
-      db.prepare(`
-        UPDATE despesas
-        SET ${campo} = ?
-        WHERE id = ?
-      `).run(valor, despesaId);
+      const despesaRef = firestore
+        .collection("consultorios")
+        .doc(sessao.consultorioId)
+        .collection("despesas")
+        .doc(despesaId);
 
-      console.log(`✅ Despesa ${despesaId} atualizada inline: ${campo} -> ${valor}`);
+      const doc = await despesaRef.get();
+      if (!doc.exists) {
+        return NextResponse.json(
+          { success: false, error: "Despesa não encontrada." },
+          { status: 404 }
+        );
+      }
+
+      await despesaRef.update({
+        [campo]: valor
+      });
+
+      console.log(`✅ Despesa ${despesaId} atualizada inline no Firestore: ${campo} -> ${valor}`);
     }
 
     return NextResponse.json({ success: true });

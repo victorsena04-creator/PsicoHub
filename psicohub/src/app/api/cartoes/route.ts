@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
-import crypto from "crypto";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+
+export const dynamic = 'force-dynamic';
 
 /**
- * API para cadastrar cartões de crédito (PF / PJ) no SQLite local.
+ * API para gerenciar cartões de crédito (PF / PJ) no Firestore (Multi-Tenant).
  */
 export async function POST(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { nome, limite, dia_fechamento, dia_vencimento, tipo_conta } = body;
 
@@ -18,23 +28,25 @@ export async function POST(request: Request) {
       );
     }
 
-    const id = crypto.randomUUID();
+    // Inserir no Firestore
+    const cartaoRef = firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("cartoes_credito")
+      .doc();
 
-    // Inserir no SQLite local
-    db.prepare(`
-      INSERT INTO cartoes_credito (id, nome, limite, dia_fechamento, dia_vencimento, tipo_conta)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
+    await cartaoRef.set({
+      id: cartaoRef.id,
       nome,
-      parseFloat(limite || 0),
-      parseInt(dia_fechamento),
-      parseInt(dia_vencimento),
-      tipo_conta
-    );
+      limite: parseFloat(limite || 0),
+      dia_fechamento: parseInt(dia_fechamento),
+      dia_vencimento: parseInt(dia_vencimento),
+      tipo_conta,
+      created_at: new Date().toISOString()
+    });
 
-    console.log(`✅ Cartão de Crédito "${nome}" cadastrado.`);
-    return NextResponse.json({ success: true, id });
+    console.log(`✅ Cartão de Crédito "${nome}" cadastrado no Firestore.`);
+    return NextResponse.json({ success: true, id: cartaoRef.id });
   } catch (error: any) {
     console.error("🚨 Erro na API de cadastro de cartão de crédito:", error);
     return NextResponse.json(
@@ -46,7 +58,32 @@ export async function POST(request: Request) {
 
 export async function GET() {
   try {
-    const cartoes = db.prepare("SELECT * FROM cartoes_credito ORDER BY nome").all();
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
+    const snapshot = await firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("cartoes_credito")
+      .get();
+
+    const cartoes = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    // Ordenar cartões por nome localmente
+    cartoes.sort((a: any, b: any) => {
+      const nomeA = a.nome || "";
+      const nomeB = b.nome || "";
+      return nomeA.localeCompare(nomeB);
+    });
+
     return NextResponse.json({ success: true, data: cartoes });
   } catch (error: any) {
     console.error("🚨 Erro na API de consulta de cartões de crédito:", error);

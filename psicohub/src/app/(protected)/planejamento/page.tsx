@@ -1,48 +1,67 @@
-import db from "@/lib/db";
 import { PlanejamentoDashboard } from "@/components/planejamento/PlanejamentoDashboard";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+import { redirect } from "next/navigation";
 
-// Força o Next.js a rodar as consultas no banco local em todo carregamento de página
-// garantindo que não exibiremos dados desatualizados (cache) do build.
+// Força o Next.js a rodar as consultas a cada carregamento de página
 export const dynamic = 'force-dynamic';
 
 export default async function PlanejamentoPage() {
-  // 1. Pegar o mês e o ano atuais no formato numérico e de texto de dois dígitos
+  const sessao = obterSessao();
+  if (!sessao) {
+    redirect("/login");
+  }
+
   const now = new Date();
   const mesAtualStr = String(now.getMonth() + 1).padStart(2, '0');
   const anoAtualStr = String(now.getFullYear());
 
-  // 2. Buscar as Dívidas Ativas no banco SQLite usando prepare e all
-  const dividas = db.prepare(`
-    SELECT * FROM dividas 
-    WHERE status = 'ativa'
-    ORDER BY vencimento_proxima_parcela ASC
-  `).all() as any[];
+  // --- QUERIES NO CLOUD FIRESTORE (Executadas em paralelo) ---
+  const [dividasSnapshot, investimentosSnapshot, recebimentosSnapshot, despesasSnapshot] = await Promise.all([
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("dividas").where("status", "==", "ativa").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("investimentos").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("recebimentos").where("status", "==", "pago").where("tipo_conta", "==", "PJ").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("despesas").where("tipo_conta", "==", "PJ").get()
+  ]);
 
-  // 3. Buscar os Investimentos cadastrados no banco SQLite
-  const investimentos = db.prepare(`
-    SELECT * FROM investimentos
-    ORDER BY saldo_acumulado DESC
-  `).all() as any[];
+  const dividas = dividasSnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data() as any
+  }));
 
-  // 4. Calcular o lucro líquido de Pessoa Jurídica (PJ) do mês atual:
-  // Recebido PJ no mês atual (apenas o que está com status 'pago')
-  const resRecebido = db.prepare(`
-    SELECT SUM(valor) as total FROM recebimentos 
-    WHERE status = 'pago'
-      AND tipo_conta = 'PJ'
-      AND strftime('%m', data_pagamento) = ?
-      AND strftime('%Y', data_pagamento) = ?
-  `).get(mesAtualStr, anoAtualStr) as { total: number | null };
-  const recebidoPJ = resRecebido?.total || 0;
+  // Ordenar por vencimento
+  dividas.sort((a, b) => {
+    const vA = a.vencimento_proxima_parcela || "";
+    const vB = b.vencimento_proxima_parcela || "";
+    return vA.localeCompare(vB);
+  });
 
-  // Despesas PJ no mês atual
-  const resDespesas = db.prepare(`
-    SELECT SUM(valor) as total FROM despesas 
-    WHERE tipo_conta = 'PJ'
-      AND strftime('%m', data) = ?
-      AND strftime('%Y', data) = ?
-  `).get(mesAtualStr, anoAtualStr) as { total: number | null };
-  const despesasPJ = resDespesas?.total || 0;
+  const investimentos = investimentosSnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data() as any
+  }));
+
+  // Ordenar decrescente por saldo acumulado
+  investimentos.sort((a, b) => (b.saldo_acumulado || 0) - (a.saldo_acumulado || 0));
+
+  // --- PROCESSAMENTO NO SERVIDOR (JS IN-MEMORY) ---
+
+  const filtrarPorMesAno = (dataStr: string) => {
+    if (!dataStr) return false;
+    const datePart = dataStr.split(" ")[0]; // Pega YYYY-MM-DD
+    const [cAno, cMes] = datePart.split("-");
+    return cAno === anoAtualStr && cMes === mesAtualStr;
+  };
+
+  const recebidoPJ = recebimentosSnapshot.docs
+    .map(doc => doc.data())
+    .filter(r => r.data_pagamento && filtrarPorMesAno(r.data_pagamento))
+    .reduce((sum, r) => sum + (r.valor || 0), 0);
+
+  const despesasPJ = despesasSnapshot.docs
+    .map(doc => doc.data())
+    .filter(d => d.data && filtrarPorMesAno(d.data))
+    .reduce((sum, d) => sum + (d.valor || 0), 0);
 
   // Lucro líquido = Recebido PJ - Despesas PJ
   const lucroLiquido = recebidoPJ - despesasPJ;

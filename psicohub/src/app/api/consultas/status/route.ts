@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
-import crypto from "crypto";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
 import { atualizarEventoAgenda, deletarEventoAgenda } from "@/lib/googleCalendar";
 
 /**
- * API para atualizar o status de uma consulta e gerar automaticamente
- * o lançamento de recebimento financeiro caso ela seja realizada.
+ * API para atualizar o status de uma consulta no Firestore e gerar automaticamente
+ * o lançamento de recebimento financeiro caso ela seja realizada (Multi-Tenant).
  */
 export async function POST(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { consultaId, status } = body;
 
@@ -19,73 +27,116 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. Buscar dados da consulta e do paciente correspondente
-    const consulta = db.prepare(`
-      SELECT c.*, p.valor_consulta, p.id as pac_id, p.nome as paciente_nome
-      FROM consultas c
-      JOIN pacientes p ON c.paciente_id = p.id
-      WHERE c.id = ?
-    `).get(consultaId) as { id: string; paciente_id: string; valor: number; data_hora: string; status: string; pac_id: string; google_event_id: string | null; paciente_nome: string } | undefined;
+    // 1. Buscar dados da consulta no Firestore
+    const consultaRef = firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("consultas")
+      .doc(consultaId);
 
-    if (!consulta) {
+    const consultaDoc = await consultaRef.get();
+    const consultaData = consultaDoc.data();
+
+    if (!consultaDoc.exists || !consultaData) {
       return NextResponse.json(
         { success: false, error: "Consulta não encontrada no sistema." },
         { status: 404 }
       );
     }
 
-    // Iniciar uma transação do SQLite para garantir consistência de dados
-    const updateTransaction = db.transaction(() => {
-      // 2. Atualizar o status da consulta
-      db.prepare("UPDATE consultas SET status = ? WHERE id = ?").run(status, consultaId);
+    // Buscar dados do paciente
+    const pacienteDoc = await firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("pacientes")
+      .doc(consultaData.paciente_id)
+      .get();
+    
+    const pacienteData = pacienteDoc.data();
+    if (!pacienteDoc.exists || !pacienteData) {
+      return NextResponse.json(
+        { success: false, error: "Paciente não encontrado." },
+        { status: 404 }
+      );
+    }
 
-      // Se a consulta foi marcada como REALIZADA
-      if (status === "realizada") {
-        // Verificar se já existe um lançamento de recebimento para esta consulta
-        const recebimentoExistente = db.prepare(
-          "SELECT id FROM recebimentos WHERE consulta_id = ?"
-        ).get(consultaId);
+    // 2. Atualizar o status da consulta
+    await consultaRef.update({ status });
 
-        if (!recebimentoExistente) {
-          // Extrair a data da consulta (YYYY-MM-DD) do campo data_hora ("YYYY-MM-DD HH:MM")
-          const dataConsulta = consulta.data_hora.split(" ")[0];
+    // Se a consulta foi marcada como REALIZADA
+    if (status === "realizada") {
+      // Verificar se já existe um recebimento cadastrado para esta consulta
+      const recebimentoQuery = await firestore
+        .collection("consultorios")
+        .doc(sessao.consultorioId)
+        .collection("recebimentos")
+        .where("consulta_id", "==", consultaId)
+        .get();
 
-          // Criar o lançamento financeiro como PENDENTE no caixa PJ (Consultório)
-          db.prepare(`
-            INSERT INTO recebimentos (id, consulta_id, paciente_id, valor, data_vencimento, data_pagamento, status, forma_pagamento, tipo_conta, categoria)
-            VALUES (?, ?, ?, ?, ?, NULL, 'pendente', NULL, 'PJ', 'atendimento')
-          `).run(
-            crypto.randomUUID(),
-            consultaId,
-            consulta.pac_id,
-            consulta.valor, // Valor acordado com o paciente
-            dataConsulta
-          );
-          console.log(`💰 Recebimento pendente gerado para a consulta realizada de ID: ${consultaId}`);
-        }
-      } 
-      // Se a consulta foi alterada para outro status que não seja realizada (ex: cancelada, falta, agendada)
-      else {
-        // Se ela foi cancelada ou alterada, deletamos apenas se o recebimento ainda estiver pendente ou atrasado.
-        // Se o recebimento já estiver PAGO (marcado por conciliação bancária ou manual), não apagamos do histórico financeiro.
-        db.prepare("DELETE FROM recebimentos WHERE consulta_id = ? AND status IN ('pendente', 'atrasado')").run(consultaId);
+      if (recebimentoQuery.empty) {
+        // Extrair a data da consulta (YYYY-MM-DD) do campo data_hora ("YYYY-MM-DD HH:MM")
+        const dataConsulta = consultaData.data_hora.split(" ")[0];
+
+        // Criar o lançamento financeiro como PENDENTE no caixa PJ (Consultório)
+        const recebimentoRef = firestore
+          .collection("consultorios")
+          .doc(sessao.consultorioId)
+          .collection("recebimentos")
+          .doc();
+
+        await recebimentoRef.set({
+          id: recebimentoRef.id,
+          consulta_id: consultaId,
+          paciente_id: consultaData.paciente_id,
+          valor: consultaData.valor, // Valor acordado com o paciente
+          data_vencimento: dataConsulta,
+          data_pagamento: null,
+          status: "pendente",
+          forma_pagamento: null,
+          tipo_conta: "PJ",
+          categoria: "atendimento"
+        });
+        console.log(`💰 Recebimento pendente gerado no Firestore para a consulta realizada de ID: ${consultaId}`);
       }
-    });
+    } 
+    // Se a consulta foi alterada para outro status que não seja realizada (ex: cancelada, falta, agendada)
+    else {
+      // Se ela foi cancelada ou alterada, deletamos o recebimento correspondente APENAS se ele ainda estiver pendente ou atrasado.
+      const recebimentoQuery = await firestore
+        .collection("consultorios")
+        .doc(sessao.consultorioId)
+        .collection("recebimentos")
+        .where("consulta_id", "==", consultaId)
+        .get();
 
-    updateTransaction();
+      const batch = firestore.batch();
+      let deleteCount = 0;
+
+      recebimentoQuery.docs.forEach(doc => {
+        const recData = doc.data();
+        if (recData.status === "pendente" || recData.status === "atrasado") {
+          batch.delete(doc.ref);
+          deleteCount++;
+        }
+      });
+
+      if (deleteCount > 0) {
+        await batch.commit();
+        console.log(`💰 Removido(s) ${deleteCount} lançamento(s) financeiro(s) pendente(s)/atrasado(s) devido à alteração de status.`);
+      }
+    }
 
     // Sincronizar alteração de status com o Google Agenda
-    if (consulta && consulta.google_event_id) {
+    if (consultaData.google_event_id) {
       try {
         if (status === "cancelada") {
-          await deletarEventoAgenda(consulta.google_event_id);
-          // Opcional: remover o google_event_id do SQLite já que ele foi apagado no Google
-          db.prepare("UPDATE consultas SET google_event_id = NULL WHERE id = ?").run(consulta.id);
+          await deletarEventoAgenda(sessao.consultorioId, consultaData.google_event_id);
+          await consultaRef.update({ google_event_id: null });
         } else {
-          await atualizarEventoAgenda(consulta.google_event_id, {
-            paciente_nome: consulta.paciente_nome,
-            data_hora: consulta.data_hora,
-            valor: consulta.valor,
+          await atualizarEventoAgenda(sessao.consultorioId, consultaData.google_event_id, {
+            paciente_nome: pacienteData.nome,
+            data_hora: consultaData.data_hora,
+            valor: consultaData.valor,
             status: status
           });
         }
@@ -94,7 +145,7 @@ export async function POST(request: Request) {
       }
     }
 
-    console.log(`✅ Consulta ${consultaId} atualizada para o status: ${status}.`);
+    console.log(`✅ Consulta ${consultaId} atualizada para o status: ${status} no Firestore.`);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("🚨 Erro na API de atualização de status da consulta:", error);

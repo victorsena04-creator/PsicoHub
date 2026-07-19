@@ -15,11 +15,12 @@ interface UpdateInfo {
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  
+  // Controle do estado do menu lateral deslizante (Drawer) no Mobile
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    // Consulta a nossa API local de versão (ela compara a versão local com a remota do GitHub).
-    // Nota: Em testes locais, você pode adicionar "?mock=true" na URL da chamada de API abaixo
-    // para simular visualmente que há uma nova versão disponível na interface.
+    // Consulta a nossa API local de versão (compara local com remota do GitHub)
     const checkVersion = async () => {
       try {
         const query = typeof window !== "undefined" ? window.location.search : "";
@@ -37,12 +38,25 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background text-on-background flex">
-      {/* Barra de Navegação Lateral Fixa */}
-      <Sidebar />
+    <div className="min-h-screen bg-background text-on-background flex overflow-x-hidden relative">
+      
+      {/* Sombra/Overlay escurecido de fundo que fecha o menu mobile ao clicar fora dele */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 bg-black/40 z-40 md:hidden animate-fadeIn"
+        />
+      )}
 
-      {/* Área de Conteúdo Principal */}
-      <main className="ml-sidebar-width w-full min-h-screen bg-surface-bright flex flex-col">
+      {/* Barra de Navegação Lateral */}
+      <Sidebar 
+        mobileOpen={mobileOpen} 
+        onClose={() => setMobileOpen(false)}
+        onOpenSettings={() => setShowSettingsModal(true)}
+      />
+
+      {/* Área de Conteúdo Principal (Ajusta margem esquerda no desktop) */}
+      <main className="ml-0 md:ml-sidebar-width w-full min-h-screen bg-surface-bright flex flex-col transition-all duration-300">
         
         {/* Banner Premium de Atualização do GitHub */}
         {updateInfo && (
@@ -69,18 +83,35 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Barra de Navegação Superior (TopNavBar) */}
-        <header className="h-16 bg-surface border-b border-outline-variant flex justify-end items-center px-8 w-full z-40 sticky top-0">
-          {/* O menu de Ajustes foi movido para a barra lateral lateral para facilitar o acesso */}
+        <header className="h-16 bg-surface border-b border-outline-variant flex justify-between md:justify-end items-center px-6 md:px-8 w-full z-30 sticky top-0">
+          
+          {/* Botão Hambúrguer + Logo - Visível apenas no Mobile */}
+          <div className="flex items-center gap-3 md:hidden">
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="flex items-center justify-center p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors cursor-pointer"
+              title="Abrir Menu Lateral"
+            >
+              <span className="material-symbols-outlined text-[24px] leading-none">menu</span>
+            </button>
+            <span className="font-bold text-primary tracking-tight font-headline-sm text-lg select-none">
+              PsicoHub
+            </span>
+          </div>
+
+          <div className="hidden md:flex items-center gap-2">
+            {/* Espaço reservado para atalhos de topo futuros */}
+          </div>
         </header>
 
         {/* Conteúdo Dinâmico das Páginas */}
-        <div className="flex-1 p-8 overflow-y-auto max-w-[1440px] mx-auto w-full">
+        <div className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto max-w-[1440px] mx-auto w-full">
           {children}
         </div>
-        
-        {/* Modal de Configurações Administrativas */}
-        <SettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
       </main>
+
+      {/* Modal de Configurações Administrativas (Posicionado no nível da página para sobrepor toda a tela) */}
+      <SettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
     </div>
   );
 }

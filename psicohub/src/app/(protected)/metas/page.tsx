@@ -1,6 +1,8 @@
-import db from "@/lib/db";
 import { MetasForm } from "@/components/metas/MetasForm";
 import { MesFiltroHeader } from "@/components/shared/MesFiltroHeader";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,11 @@ const mesesMap: { [key: string]: string } = {
 };
 
 export default async function MetasPage({ searchParams }: PageProps) {
+  const sessao = obterSessao();
+  if (!sessao) {
+    redirect("/login");
+  }
+
   const now = new Date();
   
   // Pegar mês e ano a partir dos parâmetros de busca
@@ -40,33 +47,40 @@ export default async function MetasPage({ searchParams }: PageProps) {
   const mesNum = parseInt(mesFinal, 10);
   const anoNum = parseInt(anoFinal, 10);
 
-  // 1. Buscar metas registradas no SQLite para o período selecionado
-  const metas = db.prepare(`
-    SELECT meta_prolabore, meta_despesas FROM metas 
-    WHERE mes = ? AND ano = ?
-  `).get(mesNum, anoNum) as { meta_prolabore: number; meta_despesas: number } | undefined;
+  // --- QUERIES NO CLOUD FIRESTORE (Executadas em paralelo) ---
+  const [metasSnapshot, recebimentosSnapshot, despesasSnapshot] = await Promise.all([
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("metas").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("recebimentos").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("despesas").get()
+  ]);
 
-  const metaProlabore = metas?.meta_prolabore || 0;
-  const metaDespesas = metas?.meta_despesas || 0;
+  const metas = metasSnapshot.docs.map(doc => doc.data() as any);
+  const recebimentos = recebimentosSnapshot.docs.map(doc => doc.data() as any);
+  const despesasData = despesasSnapshot.docs.map(doc => doc.data() as any);
 
-  // 2. Calcular o total recebido no caixa PJ no período selecionado
-  const resRecebidoPJ = db.prepare(`
-    SELECT SUM(valor) as total FROM recebimentos
-    WHERE status = 'pago' 
-      AND tipo_conta = 'PJ'
-      AND strftime('%m', data_pagamento) = ?
-      AND strftime('%Y', data_pagamento) = ?
-  `).get(mesFinal, anoFinal) as { total: number | null };
-  const recebidoPJ = resRecebidoPJ?.total || 0;
+  // --- PROCESSAMENTO NO SERVIDOR (JS IN-MEMORY) ---
 
-  // 3. Calcular o total de despesas pessoais PF no período selecionado
-  const resDespesasPF = db.prepare(`
-    SELECT SUM(valor) as total FROM despesas
-    WHERE tipo_conta = 'PF'
-      AND strftime('%m', data) = ?
-      AND strftime('%Y', data) = ?
-  `).get(mesFinal, anoFinal) as { total: number | null };
-  const despesasPF = resDespesasPF?.total || 0;
+  const filtrarPorMesAno = (dataStr: string) => {
+    if (!dataStr) return false;
+    const datePart = dataStr.split(" ")[0]; // Pega YYYY-MM-DD
+    const [cAno, cMes] = datePart.split("-");
+    return cAno === anoFinal && cMes === mesFinal;
+  };
+
+  // 1. Buscar metas do período selecionado
+  const metaPeriodo = metas.find(m => m.mes === mesNum && m.ano === anoNum);
+  const metaProlabore = metaPeriodo?.meta_prolabore || 0;
+  const metaDespesas = metaPeriodo?.meta_despesas || 0;
+
+  // 2. Calcular total recebido no caixa PJ no período selecionado
+  const recebidoPJ = recebimentos
+    .filter(r => r.status === "pago" && r.tipo_conta === "PJ" && r.data_pagamento && filtrarPorMesAno(r.data_pagamento))
+    .reduce((sum, r) => sum + (r.valor || 0), 0);
+
+  // 3. Calcular total de despesas pessoais PF no período selecionado
+  const despesasPF = despesasData
+    .filter(d => d.tipo_conta === "PF" && d.data && filtrarPorMesAno(d.data))
+    .reduce((sum, d) => sum + (d.valor || 0), 0);
 
   // Obter texto amigável do período selecionado
   const mesNome = mesesMap[mesFinal] || mesFinal;
@@ -76,7 +90,7 @@ export default async function MetasPage({ searchParams }: PageProps) {
     <div className="w-full">
       {/* Cabeçalho da Página via MesFiltroHeader */}
       <MesFiltroHeader
-        titulo="Metas & Limites"
+        titulo="Metas &amp; Limites"
         subtitulo="Defina e acompanhe suas metas de retirada e tetos de gastos para o período."
       />
 

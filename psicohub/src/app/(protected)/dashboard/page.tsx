@@ -1,9 +1,10 @@
-import db from "@/lib/db";
 import Link from "next/link";
 import { MesFiltroHeader } from "@/components/shared/MesFiltroHeader";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+import { redirect } from "next/navigation";
 
-// Força o Next.js a não cachear a página estaticamente, executando as queries SQL
-// a cada carregamento para mostrar dados sempre atualizados.
+// Força o Next.js a não cachear a página estaticamente
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
@@ -15,10 +16,15 @@ interface PageProps {
 }
 
 export default async function DashboardPage({ searchParams }: PageProps) {
+  const sessao = obterSessao();
+  if (!sessao) {
+    redirect("/login");
+  }
+
   // Filtro de visualização (Consolidado, PF ou PJ) vindo da URL
   const filtro = searchParams.filtro || "consolidado";
 
-  // Mapear o filtro para usar nas queries SQL
+  // Mapear o filtro para usar nas queries
   const tipoContaFiltro = filtro === "consolidado" ? null : filtro.toUpperCase();
 
   // Pegar mês e ano correntes ou vindo dos filtros da URL
@@ -26,107 +32,92 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const mes = searchParams.mes !== undefined ? String(searchParams.mes).padStart(2, '0') : String(now.getMonth() + 1).padStart(2, '0');
   const ano = searchParams.ano !== undefined ? String(searchParams.ano) : String(now.getFullYear());
 
-  const mesNum = mes ? parseInt(mes) : 0;
-  const anoNum = ano ? parseInt(ano) : 0;
+  const mesNum = mes ? parseInt(mes, 10) : 0;
+  const anoNum = ano ? parseInt(ano, 10) : 0;
 
-  // Função auxiliar para construir filtros de datas nas queries
-  const whereDate = (col: string) => {
-    let sql = "";
-    const params: any[] = [];
-    if (mes) {
-      sql += ` AND strftime('%m', ${col}) = ?`;
-      params.push(mes);
-    }
-    if (ano) {
-      sql += ` AND strftime('%Y', ${col}) = ?`;
-      params.push(ano);
-    }
-    return { sql, params };
+  // --- QUERIES NO CLOUD FIRESTORE (Executadas em paralelo) ---
+  const [consultasSnapshot, recebimentosSnapshot, despesasSnapshot, metasSnapshot] = await Promise.all([
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("consultas").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("recebimentos").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("despesas").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("metas").get()
+  ]);
+
+  const consultas = consultasSnapshot.docs.map(doc => doc.data() as any);
+  const recebimentos = recebimentosSnapshot.docs.map(doc => doc.data() as any);
+  const despesasData = despesasSnapshot.docs.map(doc => doc.data() as any);
+  const metas = metasSnapshot.docs.map(doc => doc.data() as any);
+
+  // --- PROCESSAMENTO E FILTRAGEM DOS DADOS NO SERVIDOR (JS IN-MEMORY) ---
+
+  // Função auxiliar para verificar se uma data corresponde ao mês e ano selecionados
+  const filtrarPorMesAno = (dataHoraStr: string) => {
+    if (!dataHoraStr) return false;
+    const datePart = dataHoraStr.split(" ")[0]; // Pega YYYY-MM-DD
+    if (!datePart) return false;
+    const [cAno, cMes] = datePart.split("-");
+    return cAno === ano && cMes === mes;
   };
-
-  // --- QUERIES DE CRIAÇÃO DOS DADOS FINANCEIROS ---
 
   // 1. Faturado (Consultas realizadas no período) - Exclusivo PJ / Consolidado
   let faturado = 0;
   if (filtro === "consolidado" || filtro === "pj") {
-    const fd = whereDate("data_hora");
-    const res = db.prepare(`
-      SELECT SUM(valor) as total FROM consultas 
-      WHERE status = 'realizada'
-        ${fd.sql}
-    `).get(fd.params) as { total: number | null };
-    faturado = res?.total || 0;
+    faturado = consultas
+      .filter(c => c.status === "realizada" && filtrarPorMesAno(c.data_hora))
+      .reduce((sum, c) => sum + (c.valor || 0), 0);
   }
 
   // 2. Recebido (Recebimentos com status 'pago' no período)
-  let recebido = 0;
-  const rd = whereDate("data_pagamento");
-  const queryRecebido = `
-    SELECT SUM(valor) as total FROM recebimentos 
-    WHERE status = 'pago' AND data_pagamento IS NOT NULL
-      ${tipoContaFiltro ? `AND tipo_conta = '${tipoContaFiltro}'` : ''}
-      ${rd.sql}
-  `;
-  const resRecebido = db.prepare(queryRecebido).get(rd.params) as { total: number | null };
-  recebido = resRecebido?.total || 0;
+  const recebido = recebimentos
+    .filter(r => {
+      const matchStatus = r.status === "pago" && r.data_pagamento;
+      const matchTipo = tipoContaFiltro ? r.tipo_conta === tipoContaFiltro : true;
+      const matchData = r.data_pagamento ? filtrarPorMesAno(r.data_pagamento) : false;
+      return matchStatus && matchTipo && matchData;
+    })
+    .reduce((sum, r) => sum + (r.valor || 0), 0);
 
   // 3. A Receber (Recebimentos pendentes ou atrasados geral)
-  const queryAReceber = `
-    SELECT SUM(valor) as total FROM recebimentos 
-    WHERE status IN ('pendente', 'atrasado')
-      ${tipoContaFiltro ? `AND tipo_conta = '${tipoContaFiltro}'` : ''}
-  `;
-  const resAReceber = db.prepare(queryAReceber).get() as { total: number | null };
-  const aReceber = resAReceber?.total || 0;
+  const aReceber = recebimentos
+    .filter(r => {
+      const matchStatus = r.status === "pendente" || r.status === "atrasado";
+      const matchTipo = tipoContaFiltro ? r.tipo_conta === tipoContaFiltro : true;
+      return matchStatus && matchTipo;
+    })
+    .reduce((sum, r) => sum + (r.valor || 0), 0);
 
   // 4. Previsto (Consultas agendadas ou realizadas no período) - Exclusivo PJ / Consolidado
   let previsto = 0;
   if (filtro === "consolidado" || filtro === "pj") {
-    const pd = whereDate("data_hora");
-    const queryPrevisto = `
-      SELECT SUM(valor) as total FROM consultas 
-      WHERE status IN ('agendada', 'realizada')
-        ${pd.sql}
-    `;
-    const resPrevisto = db.prepare(queryPrevisto).get(pd.params) as { total: number | null };
-    previsto = resPrevisto?.total || 0;
+    previsto = consultas
+      .filter(c => (c.status === "agendada" || c.status === "realizada") && filtrarPorMesAno(c.data_hora))
+      .reduce((sum, c) => sum + (c.valor || 0), 0);
   }
 
   // 5. Despesas (Gasto total no período)
-  const dd = whereDate("data");
-  const queryDespesas = `
-    SELECT SUM(valor) as total FROM despesas 
-    WHERE 1=1
-      ${tipoContaFiltro ? `AND tipo_conta = '${tipoContaFiltro}'` : ''}
-      ${dd.sql}
-  `;
-  const resDespesas = db.prepare(queryDespesas).get(dd.params) as { total: number | null };
-  const despesas = resDespesas?.total || 0;
+  const despesas = despesasData
+    .filter(d => {
+      const matchTipo = tipoContaFiltro ? d.tipo_conta === tipoContaFiltro : true;
+      const matchData = d.data ? filtrarPorMesAno(d.data) : false;
+      return matchTipo && matchData;
+    })
+    .reduce((sum, d) => sum + (d.valor || 0), 0);
 
   // 6. Lucro Líquido (Recebido - Despesas)
   const lucroLiquido = recebido - despesas;
 
-  // --- QUERIES DE MÉTRICAS DA AGENDA ---
-
-  // Consultas do período agrupadas por status
-  const ad = whereDate("data_hora");
-  const resAgenda = db.prepare(`
-    SELECT status, COUNT(*) as qtd FROM consultas
-    WHERE 1=1
-      ${ad.sql}
-    GROUP BY status
-  `).all(ad.params) as { status: string; qtd: number }[];
-
+  // --- MÉTRICAS DA AGENDA ---
+  const consultasPeriodo = consultas.filter(c => filtrarPorMesAno(c.data_hora));
   let agendadas = 0;
   let realizadas = 0;
   let canceladas = 0;
   let faltas = 0;
 
-  resAgenda.forEach(item => {
-    if (item.status === 'agendada') agendadas = item.qtd;
-    else if (item.status === 'realizada') realizadas = item.qtd;
-    else if (item.status === 'cancelada') canceladas = item.qtd;
-    else if (item.status === 'falta') faltas = item.qtd;
+  consultasPeriodo.forEach(item => {
+    if (item.status === 'agendada') agendadas++;
+    else if (item.status === 'realizada') realizadas++;
+    else if (item.status === 'cancelada') canceladas++;
+    else if (item.status === 'falta') faltas++;
   });
 
   // O total de agendadas para o mês inclui as que vão acontecer e as que já aconteceram
@@ -139,33 +130,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     : 0;
 
   // --- METAS E TETOS DO MÊS ---
-  let metasSql = "SELECT meta_prolabore, meta_despesas FROM metas WHERE 1=1";
-  const metasParams: any[] = [];
-  if (mesNum) {
-    metasSql += " AND mes = ?";
-    metasParams.push(mesNum);
-  }
-  if (anoNum) {
-    metasSql += " AND ano = ?";
-    metasParams.push(anoNum);
-  }
-  const metasRes = db.prepare(metasSql).get(metasParams) as { meta_prolabore: number; meta_despesas: number } | undefined;
+  const metaMes = metas.find(m => m.mes === mesNum && m.ano === anoNum);
+  const metaProlabore = metaMes?.meta_prolabore || 0;
+  const metaDespesas = metaMes?.meta_despesas || 0;
 
-  const metaProlabore = metasRes?.meta_prolabore || 0;
-  const metaDespesas = metasRes?.meta_despesas || 0;
-
-  // Cálculos de progresso das metas
+  // Progresso faturamento PJ
   const progressoPJ = metaProlabore > 0 ? Math.min(Math.round((recebido / metaProlabore) * 100), 100) : 0;
   
-  // Para despesas PF, o progresso mostra o quanto a pessoa já gastou do seu teto
-  const dpfd = whereDate("data");
-  const despesasPF = db.prepare(`
-    SELECT SUM(valor) as total FROM despesas 
-    WHERE tipo_conta = 'PF' 
-      ${dpfd.sql}
-  `).get(dpfd.params) as { total: number | null };
+  // Despesas PF no período
+  const totalDespesasPF = despesasData
+    .filter(d => d.tipo_conta === 'PF' && d.data && filtrarPorMesAno(d.data))
+    .reduce((sum, d) => sum + (d.valor || 0), 0);
   
-  const totalDespesasPF = despesasPF?.total || 0;
   const progressoPF = metaDespesas > 0 ? Math.min(Math.round((totalDespesasPF / metaDespesas) * 100), 100) : 0;
 
   // Mapear nome de mês formatado para exibir nos títulos

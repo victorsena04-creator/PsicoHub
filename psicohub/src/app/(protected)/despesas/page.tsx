@@ -1,6 +1,8 @@
-import db from "@/lib/db";
 import { DespesasDashboard } from "@/components/despesas/DespesasDashboard";
 import { MesFiltroHeader } from "@/components/shared/MesFiltroHeader";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -39,55 +41,87 @@ interface DespesaExibicao {
 }
 
 export default async function DespesasPage({ searchParams }: PageProps) {
+  const sessao = obterSessao();
+  if (!sessao) {
+    redirect("/login");
+  }
+
   // Filtros ativos na URL
   const filtro = searchParams.filtro || "consolidado";
   const now = new Date();
   const mes = searchParams.mes !== undefined ? searchParams.mes : String(now.getMonth() + 1).padStart(2, '0');
   const ano = searchParams.ano !== undefined ? searchParams.ano : String(now.getFullYear());
-  const mesNum = mes ? parseInt(mes) : now.getMonth() + 1;
-  const anoNum = ano ? parseInt(ano) : now.getFullYear();
+  const mesNum = mes ? parseInt(mes, 10) : now.getMonth() + 1;
+  const anoNum = ano ? parseInt(ano, 10) : now.getFullYear();
 
   const tipoContaFiltro = filtro === "consolidado" ? null : filtro.toUpperCase();
 
-  // 1. Carregar despesas do SQLite de acordo com os filtros
-  let queryDespesas = `
-    SELECT d.*, c.nome as cartao_nome
-    FROM despesas d
-    LEFT JOIN cartoes_credito c ON d.cartao_id = c.id
-    WHERE 1=1
-      ${tipoContaFiltro ? `AND d.tipo_conta = '${tipoContaFiltro}'` : ''}
-  `;
+  // --- QUERIES NO CLOUD FIRESTORE (Executadas em paralelo) ---
+  const [despesasSnapshot, cartoesSnapshot] = await Promise.all([
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("despesas").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("cartoes_credito").get()
+  ]);
 
-  const queryParams: any[] = [];
-  if (mes) {
-    queryDespesas += " AND strftime('%m', d.data) = ?";
-    queryParams.push(mes);
-  }
-  if (ano) {
-    queryDespesas += " AND strftime('%Y', d.data) = ?";
-    queryParams.push(ano);
-  }
-  queryDespesas += " ORDER BY d.data DESC";
+  const despesasData = despesasSnapshot.docs.map(doc => doc.data() as any);
+  const cartoes = cartoesSnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data() as any
+  })) as Cartao[];
 
-  const despesas = db.prepare(queryDespesas).all(queryParams) as DespesaExibicao[];
+  const cartoesMap = new Map(cartoes.map(c => [c.id, c]));
 
-  // 2. Carregar cartões de crédito e calcular o total da fatura do período de cada um
-  const cartoes = db.prepare("SELECT * FROM cartoes_credito ORDER BY nome").all() as Cartao[];
+  // --- PROCESSAMENTO NO SERVIDOR (JS IN-MEMORY) ---
 
+  const filtrarPorMesAno = (dataStr: string) => {
+    if (!dataStr) return false;
+    const datePart = dataStr.split(" ")[0]; // Pega YYYY-MM-DD
+    const [cAno, cMes] = datePart.split("-");
+    return cAno === ano && cMes === mes;
+  };
+
+  // 1. Filtrar e mapear despesas
+  let despesas = despesasData.map(d => {
+    const cartao = d.cartao_id ? cartoesMap.get(d.cartao_id) : null;
+    return {
+      id: d.id,
+      descricao: d.descricao,
+      valor: d.valor || 0,
+      data: d.data,
+      categoria: d.categoria || "outros",
+      origem: d.origem || "manual",
+      tipo_conta: d.tipo_conta,
+      meio_pagamento: d.meio_pagamento,
+      cartao_id: d.cartao_id || null,
+      cartao_nome: cartao?.nome || null,
+      fatura_mes: d.fatura_mes || null,
+      fatura_ano: d.fatura_ano || null
+    } as DespesaExibicao;
+  });
+
+  // Aplicar filtros
+  despesas = despesas.filter(d => {
+    const matchTipo = tipoContaFiltro ? d.tipo_conta === tipoContaFiltro : true;
+    const matchData = d.data ? filtrarPorMesAno(d.data) : false;
+    return matchTipo && matchData;
+  });
+
+  // Ordenar despesas por data decrescente
+  despesas.sort((a, b) => b.data.localeCompare(a.data));
+
+  // 2. Calcular total de fatura para cada cartão
   const cartoesComFatura = cartoes.map(cartao => {
-    // Somar despesas deste cartão na fatura do mês selecionado
-    const res = db.prepare(`
-      SELECT SUM(valor) as total FROM despesas
-      WHERE cartao_id = ? 
-        AND fatura_mes = ? 
-        AND fatura_ano = ?
-    `).get(cartao.id, mesNum, anoNum) as { total: number | null };
+    const totalFatura = despesasData
+      .filter(d => d.cartao_id === cartao.id && d.fatura_mes === mesNum && d.fatura_ano === anoNum)
+      .reduce((sum, d) => sum + (d.valor || 0), 0);
 
     return {
       ...cartao,
-      valor_fatura: res?.total || 0
+      valor_fatura: totalFatura
     };
   });
+
+  // Ordenar cartões por nome
+  cartoesComFatura.sort((a, b) => a.nome.localeCompare(b.nome));
 
   return (
     <div className="w-full">

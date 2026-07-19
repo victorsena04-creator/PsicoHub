@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
-import crypto from "crypto";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+
+export const dynamic = 'force-dynamic';
 
 /**
  * API para atualizar ou criar metas financeiras (Meta PJ e Teto PF)
- * para o mês e ano corrente no SQLite local.
+ * para o mês e ano corrente no Firestore (Multi-Tenant).
  */
 export async function POST(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { meta_prolabore, meta_despesas, mes: bodyMes, ano: bodyAno } = body;
 
@@ -26,27 +36,40 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verificar se já existe um registro de meta cadastrado para o mês/ano corrente
-    const metaExistente = db.prepare(
-      "SELECT id FROM metas WHERE mes = ? AND ano = ?"
-    ).get(mes, ano) as { id: string } | undefined;
+    // Verificar se já existe um registro de meta cadastrado para o mês/ano corrente no Firestore
+    const metasQuery = await firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("metas")
+      .where("mes", "==", mes)
+      .where("ano", "==", ano)
+      .get();
 
-    if (metaExistente) {
-      // Atualizar o registro existente no SQLite
-      db.prepare(`
-        UPDATE metas 
-        SET meta_prolabore = ?, meta_despesas = ? 
-        WHERE mes = ? AND ano = ?
-      `).run(valProlabore, valDespesas, mes, ano);
-      console.log(`✅ Metas do mês ${mes}/${ano} atualizadas: PJ = R$ ${valProlabore}, PF = R$ ${valDespesas}`);
+    if (!metasQuery.empty) {
+      // Atualizar o registro existente no Firestore
+      const metaDoc = metasQuery.docs[0];
+      await metaDoc.ref.update({
+        meta_prolabore: valProlabore,
+        meta_despesas: valDespesas
+      });
+      console.log(`✅ Metas do mês ${mes}/${ano} atualizadas no Firestore: PJ = R$ ${valProlabore}, PF = R$ ${valDespesas}`);
     } else {
-      // Inserir um novo registro no SQLite
-      const id = crypto.randomUUID();
-      db.prepare(`
-        INSERT INTO metas (id, meta_prolabore, meta_despesas, mes, ano)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(id, valProlabore, valDespesas, mes, ano);
-      console.log(`✅ Novas metas do mês ${mes}/${ano} criadas: PJ = R$ ${valProlabore}, PF = R$ ${valDespesas}`);
+      // Inserir um novo registro no Firestore
+      const metaRef = firestore
+        .collection("consultorios")
+        .doc(sessao.consultorioId)
+        .collection("metas")
+        .doc();
+
+      await metaRef.set({
+        id: metaRef.id,
+        meta_prolabore: valProlabore,
+        meta_despesas: valDespesas,
+        mes,
+        ano,
+        created_at: new Date().toISOString()
+      });
+      console.log(`✅ Novas metas do mês ${mes}/${ano} criadas no Firestore: PJ = R$ ${valProlabore}, PF = R$ ${valDespesas}`);
     }
 
     return NextResponse.json({ success: true });

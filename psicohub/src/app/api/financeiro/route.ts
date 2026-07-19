@@ -1,11 +1,23 @@
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
-import crypto from "crypto";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * API para cadastrar um lançamento financeiro manual avulso no Firestore (Multi-Tenant).
+ * Trata entradas (recebimentos pagos) e saídas (despesas em conta corrente ou cartão).
+ */
 export async function POST(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { 
       tipo_lancamento, // "entrada" ou "saida"
@@ -33,35 +45,48 @@ export async function POST(request: Request) {
       );
     }
 
-    const id = crypto.randomUUID();
-
     if (tipo_lancamento === "entrada") {
-      // 1. Cadastrar na tabela de Recebimentos
+      // 1. Cadastrar na subcoleção de Recebimentos
       // Como é lançamento manual avulso de receita, assume-se que já está pago
-      db.prepare(`
-        INSERT INTO recebimentos (id, consulta_id, paciente_id, valor, data_vencimento, data_pagamento, status, forma_pagamento, tipo_conta)
-        VALUES (?, NULL, NULL, ?, ?, ?, 'pago', 'Pix', ?)
-      `).run(
-        id,
-        valorNum,
-        data.trim(), // data de vencimento
-        data.trim(), // data de pagamento
-        tipo_conta.trim()
-      );
-      console.log(`✅ Receita de R$ ${valorNum} cadastrada manualmente.`);
+      const recebimentoRef = firestore
+        .collection("consultorios")
+        .doc(sessao.consultorioId)
+        .collection("recebimentos")
+        .doc();
+
+      await recebimentoRef.set({
+        id: recebimentoRef.id,
+        consulta_id: null,
+        paciente_id: null,
+        valor: valorNum,
+        data_vencimento: data.trim(), // data de vencimento
+        data_pagamento: data.trim(), // data de pagamento
+        status: "pago",
+        forma_pagamento: "Pix",
+        tipo_conta: tipo_conta.trim(),
+        categoria: categoria || "outros",
+        created_at: new Date().toISOString()
+      });
+
+      console.log(`✅ Receita de R$ ${valorNum} cadastrada manualmente no Firestore.`);
+      return NextResponse.json({ success: true, id: recebimentoRef.id });
     } else {
-      // 2. Cadastrar na tabela de Despesas
-      // Se for cartão de crédito, calcula fatura mes e fatura ano
+      // 2. Cadastrar na subcoleção de Despesas
       let faturaMes: number | null = null;
       let faturaAno: number | null = null;
 
       if (meio_pagamento === "cartao_credito" && cartao_id) {
-        const cartao = db.prepare("SELECT * FROM cartoes_credito WHERE id = ?").get(cartao_id) as {
-          dia_fechamento: number;
-          dia_vencimento: number;
-        } | undefined;
+        // Buscar o cartão do Firestore
+        const cartaoDoc = await firestore
+          .collection("consultorios")
+          .doc(sessao.consultorioId)
+          .collection("cartoes_credito")
+          .doc(cartao_id)
+          .get();
 
-        if (cartao) {
+        const cartao = cartaoDoc.data();
+
+        if (cartaoDoc.exists && cartao) {
           const dataGasto = new Date(data + "T12:00:00");
           let mes = dataGasto.getMonth() + 1; // 1-indexed
           let ano = dataGasto.getFullYear();
@@ -79,25 +104,30 @@ export async function POST(request: Request) {
         }
       }
 
-      db.prepare(`
-        INSERT INTO despesas (id, descricao, valor, data, categoria, origem, tipo_conta, meio_pagamento, cartao_id, fatura_mes, fatura_ano)
-        VALUES (?, ?, ?, ?, ?, 'manual', ?, ?, ?, ?, ?)
-      `).run(
-        id,
-        descricao.trim(),
-        valorNum,
-        data.trim(),
-        categoria || "outros",
-        tipo_conta.trim(),
-        meio_pagamento || "conta_corrente",
-        (meio_pagamento === "cartao_credito" && cartao_id) ? cartao_id : null,
-        faturaMes,
-        faturaAno
-      );
-      console.log(`✅ Despesa de R$ ${valorNum} cadastrada manualmente.`);
-    }
+      const despesaRef = firestore
+        .collection("consultorios")
+        .doc(sessao.consultorioId)
+        .collection("despesas")
+        .doc();
 
-    return NextResponse.json({ success: true, id });
+      await despesaRef.set({
+        id: despesaRef.id,
+        descricao: descricao.trim(),
+        valor: valorNum,
+        data: data.trim(),
+        categoria: categoria || "outros",
+        origem: "manual",
+        tipo_conta: tipo_conta.trim(),
+        meio_pagamento: meio_pagamento || "conta_corrente",
+        cartao_id: (meio_pagamento === "cartao_credito" && cartao_id) ? cartao_id : null,
+        fatura_mes: faturaMes,
+        fatura_ano: faturaAno,
+        created_at: new Date().toISOString()
+      });
+
+      console.log(`✅ Despesa de R$ ${valorNum} cadastrada manualmente no Firestore.`);
+      return NextResponse.json({ success: true, id: despesaRef.id });
+    }
 
   } catch (error: any) {
     console.error("🚨 Erro na API de Lançamento Financeiro Manual:", error);

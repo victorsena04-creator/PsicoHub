@@ -1,21 +1,32 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import { firestore } from "@/lib/firebaseAdmin";
 
 export const dynamic = 'force-dynamic';
 
-const envPath = path.join(process.cwd(), ".env");
-
 /**
  * GET: Captura o código de autorização enviado de volta pelo Google,
- * bate na API do Google para trocá-lo pelo Refresh Token, grava no arquivo .env local,
+ * bate na API do Google para trocá-lo pelo Refresh Token, grava no Firestore do consultório ativo,
  * e exibe uma página bonita em português confirmando a conexão com sucesso.
  */
 export async function GET(request: Request) {
+  let consultorioId = "desperte-psique"; // Padrão fallback
+  let host = "localhost:3000";
+
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams, host: urlHost } = new URL(request.url);
+    host = request.headers.get("host") || urlHost || "localhost:3000";
+    const protocol = host.startsWith("localhost") ? "http" : "https";
+
     const code = searchParams.get("code");
     const errorParam = searchParams.get("error");
+    const state = searchParams.get("state"); // Contém o consultorioId
+
+    if (state) {
+      consultorioId = state;
+    }
+
+    const redirect_uri = `${protocol}://${host}/api/integracoes/google-calendar/callback`;
+    const dashboard_url = `${protocol}://${host}/dashboard`;
 
     // Se o usuário negou ou ocorreu algum erro de autorização no navegador
     if (errorParam || !code) {
@@ -39,7 +50,7 @@ export async function GET(request: Request) {
           <div class="card">
             <h1>Conexão Cancelada</h1>
             <p>Você cancelou a autorização ou ocorreu um erro de conexão com o Google Agenda (${errorParam || "código ausente"}). Nenhuma chave foi salva.</p>
-            <a href="http://localhost:3000/dashboard" class="btn">Voltar para o PsicoHub</a>
+            <a href="${dashboard_url}" class="btn">Voltar para o PsicoHub</a>
           </div>
         </body>
         </html>
@@ -50,10 +61,9 @@ export async function GET(request: Request) {
 
     const client_id = process.env.GOOGLE_CLIENT_ID;
     const client_secret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirect_uri = "http://localhost:3000/api/integracoes/google-calendar/callback";
 
     if (!client_id || !client_secret) {
-      throw new Error("Client ID ou Client Secret do Google ausente no .env do servidor local.");
+      throw new Error("Client ID ou Client Secret do Google ausente no servidor.");
     }
 
     // 1. Solicitar o Access Token e o Refresh Token ao Google
@@ -80,46 +90,23 @@ export async function GET(request: Request) {
     const refresh_token = tokenData.refresh_token;
 
     if (!refresh_token) {
-      // Se não retornar refresh_token, quer dizer que ela já autorizou o app e o Google enviou o token apenas na primeira vez.
-      // Para resolver isso, ela precisa desconectar o app na conta do Google dela, ou passamos prompt=consent (que passamos na rota /login, então deve vir!)
       throw new Error(
-        "O Google não enviou o refresh_token de acesso definitivo. Por favor, remova o PsicoHub das permissões da sua conta do Google e clique em conectar novamente no painel."
+        "O Google não enviou o refresh_token de acesso definitivo. Por favor, remova o PsicoHub das permissões da sua conta do Google e tente novamente."
       );
     }
 
-    // 2. Gravar o token gerado no arquivo .env local do computador dela
-    let envContent = "";
-    if (fs.existsSync(envPath)) {
-      envContent = fs.readFileSync(envPath, "utf-8");
-    }
+    // 2. Gravar o refresh_token do consultório ativo no Firestore
+    await firestore
+      .collection("consultorios")
+      .doc(consultorioId)
+      .collection("configuracoes")
+      .doc("google_calendar")
+      .set({
+        refresh_token: refresh_token.trim(),
+        updated_at: new Date().toISOString()
+      }, { merge: true });
 
-    const updateEnvVar = (content: string, key: string, val: string): string => {
-      const regex = new RegExp(`^${key}=.*$`, "m");
-      const line = `${key}=${val}`;
-      if (regex.test(content)) {
-        return content.replace(regex, line);
-      } else {
-        return content.trim() + `\n${line}\n`;
-      }
-    };
-
-    let newEnvContent = envContent;
-    newEnvContent = updateEnvVar(newEnvContent, "GOOGLE_REFRESH_TOKEN", refresh_token.trim());
-    
-    // Atualizar no processo atual para passar a rodar imediatamente
-    process.env.GOOGLE_REFRESH_TOKEN = refresh_token.trim();
-
-    fs.writeFileSync(envPath, newEnvContent, "utf-8");
-    console.log("✅ Google Refresh Token gravado automaticamente no .env do servidor local.");
-
-    // Gravar também no SQLite persistente do AppData
-    try {
-      const db = (await import("@/lib/db")).default;
-      db.prepare("INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES (?, ?)").run("GOOGLE_REFRESH_TOKEN", refresh_token.trim());
-      console.log("✅ Google Refresh Token gravado na tabela configuracoes_sistema do banco SQLite persistente.");
-    } catch (dbErr) {
-      console.error("🚨 Erro ao salvar Refresh Token no SQLite:", dbErr);
-    }
+    console.log(`✅ Google Refresh Token gravado no Firestore para o consultório: ${consultorioId}`);
 
     // 3. Retornar página de sucesso em HTML5 bonito
     return new NextResponse(
@@ -144,8 +131,8 @@ export async function GET(request: Request) {
         <div class="card">
           <div class="icon">✓</div>
           <h1>Conexão Concluída!</h1>
-          <p>Sua conta do Google foi conectada ao PsicoHub local com sucesso. O calendário e os horários das suas consultas começarão a ser sincronizados de forma bidirecional.</p>
-          <a href="http://localhost:3000/dashboard" class="btn">Voltar para o PsicoHub</a>
+          <p>Sua conta do Google foi conectada ao PsicoHub na nuvem com sucesso. O calendário e os horários das suas consultas começarão a ser sincronizados de forma bidirecional.</p>
+          <a href="${dashboard_url}" class="btn">Voltar para o PsicoHub</a>
         </div>
       </body>
       </html>
@@ -155,6 +142,8 @@ export async function GET(request: Request) {
 
   } catch (error: any) {
     console.error("🚨 Erro de Callback do Google Agenda:", error);
+    const protocol = host.startsWith("localhost") ? "http" : "https";
+    const dashboard_url = `${protocol}://${host}/dashboard`;
     return new NextResponse(
       `
       <!DOCTYPE html>
@@ -178,7 +167,7 @@ export async function GET(request: Request) {
           <div class="icon">✗</div>
           <h1>Erro ao Conectar</h1>
           <p>Erro: ${error.message || "Erro desconhecido"}</p>
-          <a href="http://localhost:3000/dashboard" class="btn">Voltar para o PsicoHub</a>
+          <a href="${dashboard_url}" class="btn">Voltar para o PsicoHub</a>
         </div>
       </body>
       </html>

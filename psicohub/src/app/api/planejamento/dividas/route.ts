@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
-import crypto from "crypto";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+
+export const dynamic = 'force-dynamic';
 
 /**
- * API para cadastrar uma nova dívida no SQLite local.
+ * API para cadastrar uma nova dívida no Firestore (Multi-Tenant).
  */
 export async function POST(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const {
       credor,
@@ -25,24 +35,30 @@ export async function POST(request: Request) {
       );
     }
 
-    const id = crypto.randomUUID();
+    // Inserir no Firestore
+    const dividaRef = firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("dividas")
+      .doc();
 
-    // Inserir no SQLite local
-    db.prepare(`
-      INSERT INTO dividas (id, credor, valor_total, valor_pago, valor_parcela, parcelas_totais, parcelas_pagas, destinacao_mensal, status, tipo_conta, vencimento_proxima_parcela)
-      VALUES (?, ?, ?, 0, ?, ?, 0, 0, 'ativa', ?, ?)
-    `).run(
-      id,
+    await dividaRef.set({
+      id: dividaRef.id,
       credor,
-      parseFloat(valor_total),
-      parseFloat(valor_parcela),
-      parseInt(parcelas_totais),
-      tipo_conta || "PF",
-      vencimento_proxima_parcela || null
-    );
+      valor_total: parseFloat(valor_total),
+      valor_pago: 0,
+      valor_parcela: parseFloat(valor_parcela),
+      parcelas_totais: parseInt(parcelas_totais),
+      parcelas_pagas: 0,
+      destinacao_mensal: 0,
+      status: "ativa",
+      tipo_conta: tipo_conta || "PF",
+      vencimento_proxima_parcela: vencimento_proxima_parcela || null,
+      created_at: new Date().toISOString()
+    });
 
-    console.log(`✅ Dívida com "${credor}" de R$ ${valor_total} registrada.`);
-    return NextResponse.json({ success: true, id });
+    console.log(`✅ Dívida com "${credor}" de R$ ${valor_total} registrada no Firestore.`);
+    return NextResponse.json({ success: true, id: dividaRef.id });
   } catch (error: any) {
     console.error("🚨 Erro na API de cadastro de dívida:", error);
     return NextResponse.json(

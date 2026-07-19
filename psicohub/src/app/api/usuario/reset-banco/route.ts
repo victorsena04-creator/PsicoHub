@@ -1,100 +1,88 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import crypto from "crypto";
-import db from "@/lib/db";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * API para resetar todos os dados do consultório ativo (multi-tenant) no Firestore.
+ * Exige a digitação do e-mail do usuário logado como confirmação de segurança.
+ */
 export async function POST(request: Request) {
   try {
-    const cookieStore = cookies();
-    const sessionCookie = cookieStore.get("psicohub_session")?.value;
+    const sessao = obterSessao();
 
-    if (!sessionCookie) {
+    if (!sessao) {
       return NextResponse.json(
         { success: false, error: "Usuário não autenticado." },
         { status: 401 }
       );
     }
 
-    let sessionUser: { id: string; username: string; role: string };
-    try {
-      const decoded = decodeURIComponent(sessionCookie);
-      const cleaned = decoded.startsWith('"') && decoded.endsWith('"') 
-        ? decoded.slice(1, -1) 
-        : decoded;
-      sessionUser = JSON.parse(cleaned);
-    } catch (err) {
-      return NextResponse.json(
-        { success: false, error: "Sessão inválida." },
-        { status: 400 }
-      );
-    }
-
     const body = await request.json();
-    const { passwordConfirm1, passwordConfirm2 } = body;
+    const { emailConfirmacao } = body;
 
-    if (!passwordConfirm1 || !passwordConfirm2) {
+    if (!emailConfirmacao) {
       return NextResponse.json(
-        { success: false, error: "Digite a confirmação de senha nos dois campos." },
+        { success: false, error: "Digite seu e-mail para confirmar a deleção permanente." },
         { status: 400 }
       );
     }
 
-    if (passwordConfirm1 !== passwordConfirm2) {
+    if (emailConfirmacao.trim().toLowerCase() !== sessao.email.toLowerCase()) {
       return NextResponse.json(
-        { success: false, error: "As senhas de confirmação não coincidem." },
+        { success: false, error: "O e-mail digitado não corresponde ao seu e-mail de sessão." },
         { status: 400 }
       );
     }
 
-    // Buscar a senha real do usuário no banco SQLite para validar a autorização
-    const user = db.prepare("SELECT password_hash FROM usuarios WHERE id = ?").get(sessionUser.id) as {
-      password_hash: string;
-    } | undefined;
+    // Coleções do consultório que serão limpas de forma isolada
+    const subcolecoes = [
+      "pacientes",
+      "agenda_base",
+      "consultas",
+      "recebimentos",
+      "cartoes_credito",
+      "despesas",
+      "regras_classificacao",
+      "metas",
+      "dividas",
+      "investimentos",
+      "termos_ignorar_extrato"
+    ];
 
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: "Usuário não encontrado." },
-        { status: 404 }
-      );
+    console.log(`⚠️ [RESET] Iniciando reset de dados do consultório "${sessao.consultorioId}" solicitado por "${sessao.email}".`);
+
+    const batch = firestore.batch();
+    let totalDeletado = 0;
+
+    for (const col of subcolecoes) {
+      const snapshot = await firestore
+        .collection("consultorios")
+        .doc(sessao.consultorioId)
+        .collection(col)
+        .get();
+
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+        totalDeletado++;
+      });
     }
 
-    // Gerar o hash SHA-256 e comparar
-    const passwordHash = crypto.createHash("sha256").update(passwordConfirm1).digest("hex");
-    if (passwordHash !== user.password_hash) {
-      return NextResponse.json(
-        { success: false, error: "Senha incorreta. Confirmação negada." },
-        { status: 401 }
-      );
+    if (totalDeletado > 0) {
+      await batch.commit();
     }
 
-    // Executar a limpeza de dados em uma transação atômica
-    const resetTransaction = db.transaction(() => {
-      // 1. Apagar lançamentos e dados de fluxo de caixa
-      db.prepare("DELETE FROM recebimentos").run();
-      db.prepare("DELETE FROM despesas").run();
-      db.prepare("DELETE FROM consultas").run();
-      db.prepare("DELETE FROM agenda_base").run();
-      db.prepare("DELETE FROM pacientes").run();
-      
-      // 2. Apagar cartões, regras, metas, dívidas e investimentos
-      db.prepare("DELETE FROM cartoes_credito").run();
-      db.prepare("DELETE FROM regras_classificacao").run();
-      db.prepare("DELETE FROM metas").run();
-      db.prepare("DELETE FROM dividas").run();
-      db.prepare("DELETE FROM investimentos").run();
+    console.log(`✅ [RESET] Reset concluído com sucesso. ${totalDeletado} documentos deletados.`);
+    return NextResponse.json({
+      success: true,
+      message: `Todos os dados do seu consultório foram apagados com sucesso (${totalDeletado} registros limpos).`
     });
 
-    resetTransaction();
-    
-    console.log(`⚠️ BANCO DE DADOS RESETADO COMPLETAMENTE pelo usuário "${sessionUser.username}".`);
-    return NextResponse.json({ success: true, message: "Banco de dados local limpo com sucesso." });
-
   } catch (error: any) {
-    console.error("🚨 Erro ao resetar banco de dados:", error);
+    console.error("🚨 Erro ao resetar dados do consultório no Firestore:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Erro interno do servidor." },
+      { success: false, error: error.message || "Erro interno do servidor ao resetar dados." },
       { status: 500 }
     );
   }

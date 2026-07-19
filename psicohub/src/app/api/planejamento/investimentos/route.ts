@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
-import crypto from "crypto";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+
+export const dynamic = 'force-dynamic';
 
 /**
- * API para cadastrar um novo ativo de investimento no SQLite local.
+ * API para cadastrar um novo ativo de investimento no Firestore (Multi-Tenant).
  */
 export async function POST(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { nome_ativo, tipo_investimento, saldo_acumulado, meta_aporte_mensal, tipo_conta } = body;
 
@@ -18,23 +28,25 @@ export async function POST(request: Request) {
       );
     }
 
-    const id = crypto.randomUUID();
+    // Inserir no Firestore
+    const investimentoRef = firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("investimentos")
+      .doc();
 
-    // Inserir no SQLite local
-    db.prepare(`
-      INSERT INTO investimentos (id, nome_ativo, tipo_investimento, saldo_acumulado, meta_aporte_mensal, tipo_conta)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
+    await investimentoRef.set({
+      id: investimentoRef.id,
       nome_ativo,
       tipo_investimento,
-      parseFloat(saldo_acumulado || 0),
-      parseFloat(meta_aporte_mensal || 0),
-      tipo_conta || "PF"
-    );
+      saldo_acumulado: parseFloat(saldo_acumulado || 0),
+      meta_aporte_mensal: parseFloat(meta_aporte_mensal || 0),
+      tipo_conta: tipo_conta || "PF",
+      created_at: new Date().toISOString()
+    });
 
-    console.log(`✅ Investimento em "${nome_ativo}" cadastrado.`);
-    return NextResponse.json({ success: true, id });
+    console.log(`✅ Investimento em "${nome_ativo}" cadastrado no Firestore.`);
+    return NextResponse.json({ success: true, id: investimentoRef.id });
   } catch (error: any) {
     console.error("🚨 Erro na API de cadastro de investimento:", error);
     return NextResponse.json(

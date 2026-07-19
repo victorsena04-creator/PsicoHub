@@ -1,8 +1,10 @@
-import db from "@/lib/db";
 import { RecebimentosTable } from "@/components/recebimentos/RecebimentosTable";
 import Link from "next/link";
 import { ExportarRelatorioBtn } from "@/components/recebimentos/ExportarRelatorioBtn";
 import { MesFiltroHeader } from "@/components/shared/MesFiltroHeader";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,11 @@ interface RecebimentoQuery {
 }
 
 export default async function RecebimentosPage({ searchParams }: PageProps) {
+  const sessao = obterSessao();
+  if (!sessao) {
+    redirect("/login");
+  }
+
   // Filtros ativos
   const statusFiltro = searchParams.status || "todos";
   const contextoFiltro = searchParams.contexto || "todos";
@@ -39,56 +46,76 @@ export default async function RecebimentosPage({ searchParams }: PageProps) {
   const mes = searchParams.mes !== undefined ? searchParams.mes : String(now.getMonth() + 1).padStart(2, '0');
   const ano = searchParams.ano !== undefined ? searchParams.ano : String(now.getFullYear());
 
-  // Montar query SQL dinâmica no SQLite
-  let sql = `
-    SELECT 
-      r.id, 
-      r.consulta_id, 
-      r.paciente_id, 
-      r.valor, 
-      r.data_vencimento, 
-      r.data_pagamento, 
-      r.status, 
-      r.forma_pagamento, 
-      r.tipo_conta,
-      COALESCE(p.nome, 'Lançamento Avulso (Extrato)') as paciente_nome,
-      COALESCE(p.frequencia, 'avulso') as paciente_frequencia,
-      c.data_hora as data_consulta
-    FROM recebimentos r
-    LEFT JOIN pacientes p ON r.paciente_id = p.id
-    LEFT JOIN consultas c ON r.consulta_id = c.id
-    WHERE 1=1
-  `;
+  // --- QUERIES NO CLOUD FIRESTORE (Executadas em paralelo) ---
+  const [recebimentosSnapshot, pacientesSnapshot, consultasSnapshot] = await Promise.all([
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("recebimentos").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("pacientes").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("consultas").get()
+  ]);
 
-  const queryParams: any[] = [];
+  const recebimentosData = recebimentosSnapshot.docs.map(doc => doc.data() as any);
+  const pacientesMap = new Map(pacientesSnapshot.docs.map(doc => [doc.id, doc.data() as any]));
+  const consultasMap = new Map(consultasSnapshot.docs.map(doc => [doc.id, doc.data() as any]));
 
-  // Aplicar filtro de status
-  if (statusFiltro !== "todos") {
-    sql += " AND r.status = ?";
-    queryParams.push(statusFiltro);
-  }
+  // --- FILTRAGEM E MAPEAMENTO (UNION/JOIN SIMULADO NO JS) ---
 
-  // Aplicar filtro de contexto (PF / PJ)
-  if (contextoFiltro !== "todos") {
-    sql += " AND r.tipo_conta = ?";
-    queryParams.push(contextoFiltro.toUpperCase());
-  }
+  const filtrarPorMesAno = (dataStr: string) => {
+    if (!dataStr) return false;
+    const datePart = dataStr.split(" ")[0]; // Pega YYYY-MM-DD
+    const [cAno, cMes] = datePart.split("-");
+    return cAno === ano && cMes === mes;
+  };
 
-  // Aplicar filtro de Mês e Ano baseados em vencimento ou pagamento
-  if (mes) {
-    sql += " AND (strftime('%m', r.data_vencimento) = ? OR (r.data_pagamento IS NOT NULL AND strftime('%m', r.data_pagamento) = ?))";
-    queryParams.push(mes, mes);
-  }
-  if (ano) {
-    sql += " AND (strftime('%Y', r.data_vencimento) = ? OR (r.data_pagamento IS NOT NULL AND strftime('%Y', r.data_pagamento) = ?))";
-    queryParams.push(ano, ano);
-  }
+  let recebimentos = recebimentosData.map(r => {
+    const pac = r.paciente_id ? pacientesMap.get(r.paciente_id) : null;
+    const cons = r.consulta_id ? consultasMap.get(r.consulta_id) : null;
+    
+    return {
+      id: r.id,
+      consulta_id: r.consulta_id,
+      paciente_id: r.paciente_id || "",
+      paciente_nome: pac?.nome || 'Lançamento Avulso (Extrato)',
+      paciente_frequencia: pac?.frequencia || 'avulso',
+      valor: r.valor || 0,
+      data_vencimento: r.data_vencimento || null,
+      data_pagamento: r.data_pagamento || null,
+      status: r.status || "pendente",
+      forma_pagamento: r.forma_pagamento || null,
+      tipo_conta: r.tipo_conta || "PJ",
+      data_consulta: cons?.data_hora || null
+    } as RecebimentoQuery;
+  });
 
-  // Ordenar por vencimento (mais recente primeiro)
-  sql += " ORDER BY r.data_vencimento DESC";
+  // Aplicar filtros dinamicamente
+  recebimentos = recebimentos.filter(r => {
+    // Filtro de status
+    if (statusFiltro !== "todos" && r.status !== statusFiltro) {
+      return false;
+    }
 
-  // Executar query no SQLite local
-  const recebimentos = db.prepare(sql).all(queryParams) as RecebimentoQuery[];
+    // Filtro de contexto
+    if (contextoFiltro !== "todos" && r.tipo_conta !== contextoFiltro.toUpperCase()) {
+      return false;
+    }
+
+    // Filtro de data (mes/ano) baseado no vencimento ou pagamento
+    if (mes || ano) {
+      const matchVenc = r.data_vencimento ? filtrarPorMesAno(r.data_vencimento) : false;
+      const matchPag = r.data_pagamento ? filtrarPorMesAno(r.data_pagamento) : false;
+      if (!matchVenc && !matchPag) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  // Ordenar por vencimento decrescente (mais recentes primeiro)
+  recebimentos.sort((a, b) => {
+    const vA = a.data_vencimento || "";
+    const vB = b.data_vencimento || "";
+    return vB.localeCompare(vA);
+  });
 
   return (
     <div className="w-full">

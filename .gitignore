@@ -31,3 +31,4 @@ Thumbs.db
 
 # Credenciais secretas de desenvolvedor do Google
 client_secret_*.json
+service-account.json

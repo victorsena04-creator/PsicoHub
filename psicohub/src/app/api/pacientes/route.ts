@@ -1,19 +1,25 @@
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
-import crypto from "crypto";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+
+export const dynamic = 'force-dynamic';
 
 /**
- * Rota de API para gerenciar pacientes no banco de dados SQLite local.
- * API (Application Programming Interface): Uma "ponte" que permite que o nosso frontend
- * (a tela do site) se comunique com o nosso backend (o código que roda no servidor e acessa o banco).
+ * Rota de API para gerenciar pacientes no Cloud Firestore (Multi-Tenant).
  */
 export async function POST(request: Request) {
   try {
-    // Ler os dados enviados pela tela no formato JSON (formato de texto estruturado para envio de dados)
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { nome, whatsapp, email, valor_consulta, frequencia, dia_semana, horario } = body;
 
-    // Validar se o nome foi preenchido
     if (!nome) {
       return NextResponse.json(
         { success: false, error: "O nome do paciente é obrigatório." },
@@ -21,37 +27,46 @@ export async function POST(request: Request) {
       );
     }
 
-    // Gerar um identificador único (UUID) para o paciente
-    const id = crypto.randomUUID();
+    // Referência para o novo paciente dentro do consultório do usuário
+    const pacienteRef = firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("pacientes")
+      .doc();
 
-    // Executar a query SQL para inserir o novo paciente no banco SQLite
-    db.prepare(`
-      INSERT INTO pacientes (id, nome, whatsapp, email, valor_consulta, frequencia, dia_semana, horario, ativo)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-    `).run(
-      id,
+    const novoPaciente = {
+      id: pacienteRef.id,
       nome,
-      whatsapp || null,
-      email || null,
-      parseFloat(valor_consulta || 0),
-      frequencia || "semanal",
-      dia_semana !== undefined ? parseInt(dia_semana) : 1,
-      horario || "14:00"
-    );
+      whatsapp: whatsapp || null,
+      email: email || null,
+      valor_consulta: parseFloat(valor_consulta || 0),
+      frequencia: frequencia || "semanal",
+      dia_semana: dia_semana !== undefined ? parseInt(dia_semana) : 1,
+      horario: horario || "14:00",
+      ativo: 1,
+      created_at: new Date().toISOString()
+    };
 
-    // Criar a agenda recorrente padrão (agenda base) vinculada a este paciente
-    db.prepare(`
-      INSERT INTO agenda_base (id, paciente_id, dia_semana, horario, ativo)
-      VALUES (?, ?, ?, ?, 1)
-    `).run(
-      crypto.randomUUID(),
-      id,
-      dia_semana !== undefined ? parseInt(dia_semana) : 1,
-      horario || "14:00"
-    );
+    // Salvar paciente
+    await pacienteRef.set(novoPaciente);
 
-    console.log(`✅ Paciente "${nome}" cadastrado com sucesso.`);
-    return NextResponse.json({ success: true, id });
+    // Referência para a agenda base do paciente
+    const agendaRef = firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("agenda_base")
+      .doc();
+
+    await agendaRef.set({
+      id: agendaRef.id,
+      paciente_id: pacienteRef.id,
+      dia_semana: dia_semana !== undefined ? parseInt(dia_semana) : 1,
+      horario: horario || "14:00",
+      ativo: 1
+    });
+
+    console.log(`✅ Paciente "${nome}" cadastrado com sucesso no Firestore (Consultório: ${sessao.consultorioId}).`);
+    return NextResponse.json({ success: true, id: pacienteRef.id });
   } catch (error: any) {
     console.error("🚨 Erro na API de cadastro de paciente:", error);
     return NextResponse.json(
@@ -63,7 +78,35 @@ export async function POST(request: Request) {
 
 export async function GET() {
   try {
-    const pacientes = db.prepare("SELECT id, nome, valor_consulta, dia_semana, horario FROM pacientes WHERE ativo = 1 ORDER BY nome").all();
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
+    const snapshot = await firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("pacientes")
+      .where("ativo", "==", 1)
+      .get();
+
+    const pacientes = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        nome: data.nome,
+        valor_consulta: data.valor_consulta,
+        dia_semana: data.dia_semana,
+        horario: data.horario
+      };
+    });
+
+    // Ordenação alfabética no servidor Next.js
+    pacientes.sort((a, b) => a.nome.localeCompare(b.nome));
+
     return NextResponse.json({ success: true, data: pacientes });
   } catch (error: any) {
     console.error("🚨 Erro na API de consulta de pacientes:", error);
@@ -76,6 +119,14 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { id, nome, whatsapp, email, valor_consulta, frequencia, dia_semana, horario } = body;
 
@@ -86,34 +137,41 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Atualiza o paciente no SQLite
-    db.prepare(`
-      UPDATE pacientes
-      SET nome = ?, whatsapp = ?, email = ?, valor_consulta = ?, frequencia = ?, dia_semana = ?, horario = ?
-      WHERE id = ?
-    `).run(
+    // Referência do paciente
+    const pacienteRef = firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("pacientes")
+      .doc(id);
+
+    await pacienteRef.update({
       nome,
-      whatsapp || null,
-      email || null,
-      parseFloat(valor_consulta || 0),
-      frequencia || "semanal",
-      dia_semana !== undefined ? parseInt(dia_semana) : 1,
-      horario || "14:00",
-      id
-    );
+      whatsapp: whatsapp || null,
+      email: email || null,
+      valor_consulta: parseFloat(valor_consulta || 0),
+      frequencia: frequencia || "semanal",
+      dia_semana: dia_semana !== undefined ? parseInt(dia_semana) : 1,
+      horario: horario || "14:00"
+    });
 
-    // Atualiza a agenda base correspondente
-    db.prepare(`
-      UPDATE agenda_base
-      SET dia_semana = ?, horario = ?
-      WHERE paciente_id = ?
-    `).run(
-      dia_semana !== undefined ? parseInt(dia_semana) : 1,
-      horario || "14:00",
-      id
-    );
+    // Atualizar a agenda base associada ao paciente
+    const agendaSnapshot = await firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("agenda_base")
+      .where("paciente_id", "==", id)
+      .get();
 
-    console.log(`✅ Paciente "${nome}" atualizado com sucesso.`);
+    const batch = firestore.batch();
+    agendaSnapshot.docs.forEach(doc => {
+      batch.update(doc.ref, {
+        dia_semana: dia_semana !== undefined ? parseInt(dia_semana) : 1,
+        horario: horario || "14:00"
+      });
+    });
+    await batch.commit();
+
+    console.log(`✅ Paciente "${nome}" atualizado com sucesso no Firestore.`);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("🚨 Erro na API de atualização de paciente:", error);
@@ -126,6 +184,14 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
@@ -136,11 +202,29 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Inativar no banco de dados SQLite
-    db.prepare("UPDATE pacientes SET ativo = 0 WHERE id = ?").run(id);
-    db.prepare("UPDATE agenda_base SET ativo = 0 WHERE paciente_id = ?").run(id);
+    // Inativar no Firestore
+    await firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("pacientes")
+      .doc(id)
+      .update({ ativo: 0 });
 
-    console.log(`✅ Paciente com ID ${id} inativado com sucesso.`);
+    // Inativar a agenda base correspondente
+    const agendaSnapshot = await firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("agenda_base")
+      .where("paciente_id", "==", id)
+      .get();
+
+    const batch = firestore.batch();
+    agendaSnapshot.docs.forEach(doc => {
+      batch.update(doc.ref, { ativo: 0 });
+    });
+    await batch.commit();
+
+    console.log(`✅ Paciente com ID ${id} e agenda base inativados no Firestore.`);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("🚨 Erro na API de exclusão de paciente:", error);

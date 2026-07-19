@@ -43,3 +43,5 @@ psicohub.db
 dist/
 build/
 *.exe
+
+.vercel

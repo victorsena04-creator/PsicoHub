@@ -1,8 +1,10 @@
-import db from "@/lib/db";
 import { KanbanBoard } from "@/components/agenda/KanbanBoard";
 import Link from "next/link";
 import { MesFiltroHeader } from "@/components/shared/MesFiltroHeader";
 import { gerarConsultasRecorrentesParaSemana } from "@/lib/agendaRecorrente";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,11 @@ interface ConsultaExibicao {
 }
 
 export default async function AgendaPage({ searchParams }: PageProps) {
+  const sessao = obterSessao();
+  if (!sessao) {
+    redirect("/login");
+  }
+
   // Pegar parâmetros de período
   const dataParam = searchParams.data;
   const mesParam = searchParams.mes;
@@ -53,7 +60,19 @@ export default async function AgendaPage({ searchParams }: PageProps) {
   segundaFeira.setHours(0, 0, 0, 0);
 
   // Auto-gerar consultas recorrentes configuradas na agenda base para a semana atual
-  gerarConsultasRecorrentesParaSemana(segundaFeira);
+  await gerarConsultasRecorrentesParaSemana(segundaFeira, sessao.consultorioId);
+
+  // 1 e 2. Buscar pacientes e consultas em paralelo
+  const [pacientesSnapshot, consultasSnapshot] = await Promise.all([
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("pacientes").get(),
+    firestore.collection("consultorios").doc(sessao.consultorioId).collection("consultas").get()
+  ]);
+
+  const pacientesMap = new Map(pacientesSnapshot.docs.map(doc => [doc.id, doc.data()]));
+  const consultasAll = consultasSnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data() as any
+  }));
 
   // Gerar as datas de Segunda a Sexta daquela semana
   const diasSemana = [];
@@ -66,20 +85,34 @@ export default async function AgendaPage({ searchParams }: PageProps) {
     const dataISO = dataDia.toISOString().split("T")[0]; // Formato "YYYY-MM-DD"
     const diaMes = dataDia.getDate() + " " + dataDia.toLocaleString("pt-BR", { month: "short" }).replace(".", "");
 
-    // Buscar as consultas no SQLite para este dia específico
-    const consultas = db.prepare(`
-      SELECT c.id, c.paciente_id, c.data_hora, c.status, c.e_excecao, p.nome as paciente_nome, p.valor_consulta
-      FROM consultas c
-      JOIN pacientes p ON c.paciente_id = p.id
-      WHERE substr(c.data_hora, 1, 10) = ?
-      ORDER BY substr(c.data_hora, 12, 5)
-    `).all(dataISO) as ConsultaExibicao[];
+    // Filtrar consultas do dia e fazer JOIN com paciente correspondente
+    const consultasDia = consultasAll
+      .filter(c => (c.data_hora || "").startsWith(dataISO))
+      .map(c => {
+        const pac = pacientesMap.get(c.paciente_id);
+        return {
+          id: c.id,
+          paciente_id: c.paciente_id,
+          data_hora: c.data_hora,
+          status: c.status,
+          e_excecao: c.e_excecao,
+          paciente_nome: pac?.nome || "Paciente Inexistente",
+          valor_consulta: c.valor !== undefined ? c.valor : (pac?.valor_consulta || 150.00)
+        } as ConsultaExibicao;
+      });
+
+    // Ordenar consultas por horário (hh:mm)
+    consultasDia.sort((a, b) => {
+      const horaA = (a.data_hora || "").split(" ")[1] || "";
+      const horaB = (b.data_hora || "").split(" ")[1] || "";
+      return horaA.localeCompare(horaB);
+    });
 
     diasSemana.push({
       nome: nomesDias[i],
       dataISO,
       diaMes,
-      consultas,
+      consultas: consultasDia,
     });
   }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
-import crypto from "crypto";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
 import { criarEventoAgenda, atualizarEventoAgenda } from "@/lib/googleCalendar";
 
 export const dynamic = 'force-dynamic';
@@ -8,7 +8,32 @@ export const dynamic = 'force-dynamic';
 // GET: Retornar consultas
 export async function GET() {
   try {
-    const consultas = db.prepare("SELECT * FROM consultas ORDER BY data_hora").all();
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
+    const snapshot = await firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("consultas")
+      .get();
+
+    const consultas = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    // Ordenar consultas por data_hora localmente
+    consultas.sort((a: any, b: any) => {
+      const dataA = a.data_hora || "";
+      const dataB = b.data_hora || "";
+      return dataA.localeCompare(dataB);
+    });
+
     return NextResponse.json({ success: true, data: consultas });
   } catch (error: any) {
     return NextResponse.json(
@@ -21,6 +46,14 @@ export async function GET() {
 // POST: Criar uma consulta (Novo Agendamento)
 export async function POST(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { paciente_id, data_hora, valor, e_excecao } = body;
 
@@ -34,40 +67,55 @@ export async function POST(request: Request) {
     // Buscar o valor padrão da consulta do paciente se não foi informado
     let valorCobrado = parseFloat(valor);
     if (isNaN(valorCobrado) || valorCobrado === undefined) {
-      const pac = db.prepare("SELECT valor_consulta FROM pacientes WHERE id = ?").get(paciente_id) as {
-        valor_consulta: number;
-      } | undefined;
-      valorCobrado = pac?.valor_consulta || 150.00;
+      const pacienteDoc = await firestore
+        .collection("consultorios")
+        .doc(sessao.consultorioId)
+        .collection("pacientes")
+        .doc(paciente_id)
+        .get();
+
+      const pacData = pacienteDoc.data();
+      valorCobrado = pacData?.valor_consulta || 150.00;
     }
 
-    const id = crypto.randomUUID();
+    // Referência do novo agendamento
+    const consultaRef = firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("consultas")
+      .doc();
 
-    // Inserir agendamento no banco
-    db.prepare(`
-      INSERT INTO consultas (id, paciente_id, data_hora, valor, status, e_excecao)
-      VALUES (?, ?, ?, ?, 'agendada', ?)
-    `).run(
-      id,
+    await consultaRef.set({
+      id: consultaRef.id,
       paciente_id,
-      data_hora.trim(), // Formato "YYYY-MM-DD HH:MM"
-      valorCobrado,
-      e_excecao ? 1 : 0
-    );
+      data_hora: data_hora.trim(), // Formato "YYYY-MM-DD HH:MM"
+      valor: valorCobrado,
+      status: "agendada",
+      e_excecao: e_excecao ? 1 : 0,
+      created_at: new Date().toISOString()
+    });
 
     // Buscar dados do paciente para sincronizar com o Google Agenda
-    const pacienteObj = db.prepare("SELECT nome FROM pacientes WHERE id = ?").get(paciente_id) as { nome: string } | undefined;
+    const pacienteDoc = await firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("pacientes")
+      .doc(paciente_id)
+      .get();
     
+    const pacienteData = pacienteDoc.data();
+
     // Tentar criar evento no Google Agenda de forma assíncrona
-    if (pacienteObj) {
+    if (pacienteData && pacienteData.nome) {
       try {
-        const googleEventId = await criarEventoAgenda({
-          paciente_nome: pacienteObj.nome,
+        const googleEventId = await criarEventoAgenda(sessao.consultorioId, {
+          paciente_nome: pacienteData.nome,
           data_hora: data_hora.trim(),
           valor: valorCobrado
         });
         
         if (googleEventId) {
-          db.prepare("UPDATE consultas SET google_event_id = ? WHERE id = ?").run(googleEventId, id);
+          await consultaRef.update({ google_event_id: googleEventId });
           console.log(`✅ Consulta associada ao evento do Google Agenda: ${googleEventId}`);
         }
       } catch (gErr) {
@@ -75,8 +123,8 @@ export async function POST(request: Request) {
       }
     }
 
-    console.log(`✅ Consulta cadastrada com sucesso para o paciente ${paciente_id} em ${data_hora}.`);
-    return NextResponse.json({ success: true, id });
+    console.log(`✅ Consulta cadastrada com sucesso no Firestore para o paciente ${paciente_id} em ${data_hora}.`);
+    return NextResponse.json({ success: true, id: consultaRef.id });
 
   } catch (error: any) {
     console.error("🚨 Erro ao criar consulta:", error);
@@ -90,6 +138,14 @@ export async function POST(request: Request) {
 // PUT: Atualizar data e hora (Movimentação Drag & Drop)
 export async function PUT(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { consultaId, novaDataHora } = body;
 
@@ -101,34 +157,52 @@ export async function PUT(request: Request) {
     }
 
     // Buscar dados antes de atualizar para atualizar também no Google Agenda
-    const consultaAntes = db.prepare(`
-      SELECT c.valor, c.status, c.google_event_id, p.nome as paciente_nome
-      FROM consultas c
-      JOIN pacientes p ON c.paciente_id = p.id
-      WHERE c.id = ?
-    `).get(consultaId) as { valor: number; status: string; google_event_id: string | null; paciente_nome: string } | undefined;
+    const consultaRef = firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("consultas")
+      .doc(consultaId);
 
-    // Atualizar no banco SQLite
-    db.prepare("UPDATE consultas SET data_hora = ? WHERE id = ?").run(
-      novaDataHora.trim(),
-      consultaId
-    );
+    const consultaDoc = await consultaRef.get();
+    const consultaData = consultaDoc.data();
+
+    if (!consultaDoc.exists || !consultaData) {
+      return NextResponse.json(
+        { success: false, error: "Consulta não encontrada." },
+        { status: 404 }
+      );
+    }
+
+    // Buscar nome do paciente associado
+    const pacienteDoc = await firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("pacientes")
+      .doc(consultaData.paciente_id)
+      .get();
+    
+    const pacienteData = pacienteDoc.data();
+
+    // Atualizar no Firestore
+    await consultaRef.update({
+      data_hora: novaDataHora.trim()
+    });
 
     // Se já possuía evento na Google Agenda, atualiza-o
-    if (consultaAntes && consultaAntes.google_event_id) {
+    if (consultaData.google_event_id && pacienteData && pacienteData.nome) {
       try {
-        await atualizarEventoAgenda(consultaAntes.google_event_id, {
-          paciente_nome: consultaAntes.paciente_nome,
+        await atualizarEventoAgenda(sessao.consultorioId, consultaData.google_event_id, {
+          paciente_nome: pacienteData.nome,
           data_hora: novaDataHora.trim(),
-          valor: consultaAntes.valor,
-          status: consultaAntes.status
+          valor: consultaData.valor,
+          status: consultaData.status
         });
       } catch (gErr) {
         console.warn("⚠️ Falha ao atualizar evento correspondente no Google Agenda:", gErr);
       }
     }
 
-    console.log(`🔄 Consulta ${consultaId} movida para ${novaDataHora}.`);
+    console.log(`🔄 Consulta ${consultaId} movida para ${novaDataHora} no Firestore.`);
     return NextResponse.json({ success: true });
 
   } catch (error: any) {

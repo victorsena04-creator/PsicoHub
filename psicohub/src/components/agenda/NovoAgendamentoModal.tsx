@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 interface Paciente {
@@ -13,6 +14,7 @@ interface Paciente {
 
 export function NovoAgendamentoModal() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pacientes, setPacientes] = useState<Paciente[]>([]);
@@ -25,6 +27,11 @@ export function NovoAgendamentoModal() {
   const [valor, setValor] = useState("");
   const [eExcecao, setEExcecao] = useState(false);
 
+  // Garante a montagem no lado do cliente para permitir o React Portal
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Carregar os pacientes ativos ao abrir o modal
   useEffect(() => {
     if (!isOpen) return;
@@ -36,7 +43,6 @@ export function NovoAgendamentoModal() {
         if (response.ok && resJson.success) {
           setPacientes(resJson.data);
           if (resJson.data.length > 0) {
-            // Inicializar com o primeiro paciente
             const firstPac = resJson.data[0];
             setPacienteId(firstPac.id);
             setValor(firstPac.valor_consulta.toString());
@@ -52,13 +58,11 @@ export function NovoAgendamentoModal() {
     fetchPacientes();
   }, [isOpen]);
 
-  // Função utilitária para calcular a próxima data correspondente ao dia da semana do paciente
   const preencherProximaData = (diaSemanaDesejado: number) => {
     const hoje = new Date();
-    const diaAtual = hoje.getDay(); // 0=Dom, 1=Seg, ..., 6=Sáb
+    const diaAtual = hoje.getDay();
     let diff = diaSemanaDesejado - diaAtual;
     
-    // Se for o mesmo dia mas o horário já passou, ou se for anterior, move para a próxima semana
     if (diff <= 0) {
       diff += 7;
     }
@@ -102,7 +106,6 @@ export function NovoAgendamentoModal() {
     setError("");
 
     try {
-      // Combinar data e hora para salvar no formato "YYYY-MM-DD HH:MM"
       const dataHoraCompleta = `${dataGasto} ${horario}`;
 
       const response = await fetch("/api/consultas", {
@@ -137,43 +140,55 @@ export function NovoAgendamentoModal() {
     <>
       <button 
         onClick={handleOpen}
-        className="w-full flex items-center justify-center gap-sm bg-primary text-on-primary px-md py-sm rounded-lg font-label-md hover:bg-primary-container transition-colors shadow-sm cursor-pointer"
+        className="w-full flex items-center justify-center gap-2 bg-primary text-on-primary px-3 py-2 rounded-lg font-label-md hover:bg-on-primary-fixed-variant transition-colors shadow-sm cursor-pointer text-xs font-semibold"
       >
         <span className="material-symbols-outlined text-[18px]">add</span>
         Novo Agendamento
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div onClick={handleClose} className="absolute inset-0 bg-black/45 backdrop-blur-sm"></div>
-
-          <div className="absolute w-full max-w-[500px] bg-surface-bright border border-outline-variant rounded-xl p-6 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden z-10">
+      {isOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-x-hidden animate-fadeIn">
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl w-full max-w-lg p-6 sm:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto flex flex-col gap-6">
+            
             {/* Cabeçalho */}
-            <div className="flex justify-between items-center mb-6 pb-3 border-b border-outline-variant">
-              <h3 className="font-headline-sm text-headline-sm text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">calendar_month</span>
-                Novo Agendamento
-              </h3>
-              <button onClick={handleClose} className="text-on-surface-variant hover:text-on-surface cursor-pointer">
-                <span className="material-symbols-outlined">close</span>
+            <div className="flex justify-between items-center pb-3 border-b border-outline-variant/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                  <span className="material-symbols-outlined text-[24px]">calendar_month</span>
+                </div>
+                <div>
+                  <h3 className="font-title-lg text-title-lg font-bold text-on-surface">
+                    Novo Agendamento
+                  </h3>
+                  <p className="font-body-sm text-body-sm text-on-surface-variant">
+                    Agende uma nova sessão de atendimento clínico.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={handleClose} 
+                className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer"
+                title="Fechar"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </div>
 
             {error && (
-              <div className="p-3 mb-4 bg-error-container/20 border border-error-container text-error rounded-lg text-xs font-semibold">
+              <div className="p-3.5 bg-error-container/20 border border-error/30 text-error rounded-xl text-xs font-semibold leading-relaxed">
                 {error}
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto pr-1">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               {/* Seleção do Paciente */}
-              <div>
-                <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">
+              <div className="flex flex-col gap-1.5">
+                <label className="font-label-md text-label-md text-on-surface font-semibold">
                   Paciente
                 </label>
                 {pacientes.length === 0 ? (
-                  <div className="text-xs text-on-surface-variant py-2">
-                    Nenhum paciente cadastrado ativo encontrado. Crie um paciente primeiro.
+                  <div className="p-3 bg-surface-container-low border border-outline-variant/40 rounded-lg text-xs text-on-surface-variant">
+                    Nenhum paciente cadastrado ativo encontrado. Crie um paciente primeiro na aba "Pacientes".
                   </div>
                 ) : (
                   <select
@@ -181,7 +196,7 @@ export function NovoAgendamentoModal() {
                     onChange={(e) => handlePacienteChange(e.target.value)}
                     required
                     disabled={loading}
-                    className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg text-xs focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface cursor-pointer"
+                    className="w-full h-10 px-3 bg-surface-container-lowest border border-outline-variant rounded-lg text-xs focus:outline-none focus:border-primary text-on-surface cursor-pointer"
                   >
                     {pacientes.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -193,9 +208,9 @@ export function NovoAgendamentoModal() {
               </div>
 
               {/* Data e Horário */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-label-md text-label-md text-on-surface font-semibold">
                     Data da Consulta
                   </label>
                   <input
@@ -204,11 +219,11 @@ export function NovoAgendamentoModal() {
                     onChange={(e) => setDataGasto(e.target.value)}
                     required
                     disabled={loading}
-                    className="w-full px-3 py-1.5 bg-surface border border-outline-variant rounded-lg text-xs focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface cursor-pointer"
+                    className="w-full h-10 px-3 bg-surface-container-lowest border border-outline-variant rounded-lg text-xs focus:outline-none focus:border-primary text-on-surface cursor-pointer"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-label-md text-label-md text-on-surface font-semibold">
                     Horário da Consulta
                   </label>
                   <input
@@ -217,18 +232,18 @@ export function NovoAgendamentoModal() {
                     onChange={(e) => setHorario(e.target.value)}
                     required
                     disabled={loading}
-                    className="w-full px-3 py-1.5 bg-surface border border-outline-variant rounded-lg text-xs focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface cursor-pointer"
+                    className="w-full h-10 px-3 bg-surface-container-lowest border border-outline-variant rounded-lg text-xs focus:outline-none focus:border-primary text-on-surface cursor-pointer"
                   />
                 </div>
               </div>
 
               {/* Valor da Consulta */}
-              <div>
-                <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">
+              <div className="flex flex-col gap-1.5">
+                <label className="font-label-md text-label-md text-on-surface font-semibold">
                   Valor cobrado (R$)
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant font-mono-sm text-xs">R$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant font-mono text-xs">R$</span>
                   <input
                     type="number"
                     step="0.01"
@@ -237,13 +252,13 @@ export function NovoAgendamentoModal() {
                     onChange={(e) => setValor(e.target.value)}
                     required
                     disabled={loading}
-                    className="w-full pl-9 pr-4 py-1.5 bg-surface border border-outline-variant rounded-lg text-xs font-mono-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface"
+                    className="w-full h-10 pl-9 pr-3 bg-surface-container-lowest border border-outline-variant rounded-lg text-xs font-mono focus:outline-none focus:border-primary text-on-surface"
                   />
                 </div>
               </div>
 
               {/* Consulta é Exceção? */}
-              <div className="flex items-center gap-2 pt-2">
+              <div className="flex items-center gap-2 pt-1">
                 <input
                   type="checkbox"
                   id="eExcecao"
@@ -258,26 +273,27 @@ export function NovoAgendamentoModal() {
               </div>
 
               {/* Botões */}
-              <div className="pt-4 border-t border-outline-variant flex justify-end gap-3">
+              <div className="pt-4 border-t border-outline-variant/60 flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={handleClose}
                   disabled={loading}
-                  className="px-4 py-1.5 text-xs text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-colors cursor-pointer"
+                  className="h-10 px-4 text-xs text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={loading || pacientes.length === 0}
-                  className="bg-primary hover:bg-primary/95 text-on-primary font-bold text-xs px-5 py-1.5 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+                  className="h-10 bg-primary hover:bg-on-primary-fixed-variant text-on-primary font-bold text-xs px-5 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  Agendar Sessão
+                  {loading ? "Agendando..." : "Agendar Sessão"}
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

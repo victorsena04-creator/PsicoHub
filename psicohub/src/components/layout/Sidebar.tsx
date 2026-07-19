@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { NovoAgendamentoModal } from "@/components/agenda/NovoAgendamentoModal";
-import { SettingsModal } from "./SettingsModal";
 
 // Lista de itens do menu lateral básico
 const baseMenuItems = [
@@ -18,11 +17,19 @@ const baseMenuItems = [
   { name: "Planejamento", path: "/planejamento", icon: "savings" },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onClose?: () => void;
+  onOpenSettings?: () => void;
+}
+
+export function Sidebar({ mobileOpen, onClose, onOpenSettings }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [session, setSession] = useState<{ username: string; role: string } | null>(null);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  // Adiciona o link do desenvolvedor no menu se for o e-mail administrador
+  const [isDev, setIsDev] = useState(false);
 
   // Ler o cookie de informações do usuário no client-side após a montagem (evita erros de hidratação)
   useEffect(() => {
@@ -30,25 +37,31 @@ export function Sidebar() {
     if (match) {
       try {
         const decoded = decodeURIComponent(match[2]);
-        // Limpar possíveis aspas externas que o cookie armazena
         const cleaned = decoded.startsWith('"') && decoded.endsWith('"') 
           ? decoded.slice(1, -1) 
           : decoded;
-        setSession(JSON.parse(cleaned));
+        const parsed = JSON.parse(cleaned);
+        setSession(parsed);
+        setIsDev(!!parsed.isDev);
       } catch (err) {
         console.error("Falha ao decodificar sessão:", err);
       }
     }
   }, []);
 
-  // Construir menu dinâmico: se for suporte, adiciona o Painel de Suporte
+  // Construir menu dinâmico
   const menuItems = [...baseMenuItems];
   if (session?.role === "suporte") {
     menuItems.push({ name: "Painel Suporte", path: "/suporte", icon: "admin_panel_settings" });
   }
+  // Se for Dev Admin, adiciona o painel de Dev no menu lateral
+  if (isDev) {
+    menuItems.push({ name: "Painel Dev (Admin)", path: "/dev", icon: "terminal" });
+  }
 
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
+    onClose?.();
     try {
       await fetch("/api/auth/logout", { method: "POST" });
       router.push("/login");
@@ -61,79 +74,91 @@ export function Sidebar() {
   const isSuporte = session?.role === "suporte";
 
   return (
-    <nav className="hidden md:flex flex-col h-full py-lg fixed left-0 top-0 h-full w-sidebar-width border-r border-outline-variant bg-surface z-50">
+    <nav className={`fixed left-0 top-0 h-full w-sidebar-width border-r border-outline-variant bg-surface z-50 flex flex-col py-3.5 transition-transform duration-300 md:translate-x-0 ${
+      mobileOpen ? "translate-x-0" : "-translate-x-full"
+    }`}>
       {/* Cabeçalho da Sidebar (Logo do Aplicativo) */}
-      <div className="px-md mb-xl flex items-center gap-md">
-        <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold text-headline-sm">
-          P
-        </div>
-        <div>
-          <div className="font-headline-md text-headline-md font-bold text-primary">
-            PsicoHub
+      <div className="px-4 mb-3 flex items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold text-headline-sm shrink-0">
+            P
           </div>
-          <div className="font-label-sm text-label-sm text-on-surface-variant">
-            Gestão Clínica & Financeira
+          <div className="flex flex-col">
+            <div className="font-headline-md text-headline-md font-bold text-primary leading-none">
+              PsicoHub
+            </div>
+            <div className="font-label-sm text-[10px] text-on-surface-variant mt-0.5">
+              Gestão Clínica &amp; Financeira
+            </div>
           </div>
         </div>
+        {/* Botão de Fechar Menu no Mobile */}
+        <button
+          onClick={onClose}
+          className="md:hidden text-on-surface-variant hover:text-on-surface p-1 hover:bg-surface-container-high rounded-full cursor-pointer flex items-center justify-center shrink-0"
+        >
+          <span className="material-symbols-outlined text-[18px]">close</span>
+        </button>
       </div>
 
       {/* Botão de Atalho para Novo Agendamento (Ocultado para suporte técnico) */}
       {!isSuporte && (
-        <div className="mx-md mb-lg">
+        <div className="mx-3 mb-3 shrink-0" onClick={onClose}>
           <NovoAgendamentoModal />
         </div>
       )}
 
-      {/* Links de Navegação Principal */}
-      <div className="flex-1 px-sm flex flex-col gap-xs font-label-md text-label-md overflow-y-auto">
+      {/* Links de Navegação Principal (Espaçamento interno compacto para não gerar scrollbar) */}
+      <div className="flex-1 px-2.5 flex flex-col gap-0.5 font-label-md text-label-md overflow-y-auto">
         {menuItems.map((item) => {
           const isActive = pathname === item.path;
           return (
             <Link
               key={item.path}
               href={item.path}
-              className={`flex items-center gap-md px-md py-sm rounded-lg transition-all duration-150 ${
+              onClick={onClose}
+              className={`flex items-center gap-3 px-3 py-1.5 rounded-lg transition-all duration-150 text-xs ${
                 isActive
                   ? "bg-secondary-container text-on-secondary-container border-l-2 border-primary font-bold"
                   : "text-on-surface-variant hover:bg-surface-container-high opacity-85 hover:opacity-100"
               }`}
             >
-              <span className="material-symbols-outlined text-[20px]">
+              <span className="material-symbols-outlined text-[18px] shrink-0">
                 {item.icon}
               </span>
-              {item.name}
+              <span className="truncate">{item.name}</span>
             </Link>
           );
         })}
       </div>
 
       {/* Rodapé da Sidebar (Informações do Usuário, Ajustes & Logout) */}
-      <div className="px-md pt-md border-t border-outline-variant mt-auto flex flex-col gap-1">
+      <div className="px-3 pt-2.5 border-t border-outline-variant mt-auto flex flex-col gap-0.5 shrink-0">
         {isSuporte && (
-          <div className="flex items-center gap-md mb-2 px-sm">
-            <span className="material-symbols-outlined text-primary text-[20px]">build</span>
-            <div className="text-xs font-semibold text-primary">Suporte Técnico</div>
+          <div className="flex items-center gap-2 mb-1 px-2">
+            <span className="material-symbols-outlined text-primary text-[18px]">build</span>
+            <div className="text-[11px] font-semibold text-primary">Suporte Técnico</div>
           </div>
         )}
         
         <button
-          onClick={() => setShowSettingsModal(true)}
-          className="w-full flex items-center gap-md text-on-surface-variant hover:text-primary px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-left cursor-pointer"
+          onClick={() => {
+            onClose?.();
+            onOpenSettings?.();
+          }}
+          className="w-full flex items-center gap-3 text-on-surface-variant hover:text-primary px-3 py-1.5 rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-left cursor-pointer text-xs"
         >
-          <span className="material-symbols-outlined text-[20px]">settings</span>
-          Ajustes do Aplicativo
+          <span className="material-symbols-outlined text-[18px] shrink-0">settings</span>
+          <span className="truncate">Ajustes do Aplicativo</span>
         </button>
 
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-md text-on-surface-variant hover:text-error px-md py-sm rounded-lg hover:bg-error-container/10 transition-colors font-label-md text-left cursor-pointer"
+          className="w-full flex items-center gap-3 text-on-surface-variant hover:text-error px-3 py-1.5 rounded-lg hover:bg-error-container/10 transition-colors font-label-md text-left cursor-pointer text-xs"
         >
-          <span className="material-symbols-outlined text-[20px]">logout</span>
-          Sair do Sistema
+          <span className="material-symbols-outlined text-[18px] shrink-0">logout</span>
+          <span className="truncate">Sair do Sistema</span>
         </button>
-
-        {/* Modal de Configurações Administrativas */}
-        <SettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
       </div>
     </nav>
   );

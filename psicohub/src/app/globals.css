@@ -17,11 +17,64 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-outfit), system-ui, -apple-system, sans-serif;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* Animação de Piscar / Brilho Intenso ao passar o mouse */
+@keyframes hoverFlash {
+  0% {
+    filter: brightness(1);
+    opacity: 1;
+  }
+  40% {
+    filter: brightness(1.45);
+    opacity: 0.85;
+  }
+  100% {
+    filter: brightness(1.25);
+    opacity: 1;
+  }
+}
+
+/* Regra Global de Transição para Botões e Clicáveis */
+button,
+a,
+[role="button"],
+input[type="submit"],
+input[type="button"],
+.cursor-pointer {
+  transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease !important;
+}
+
+/* Efeito ao passar o mouse (Hover: Piscada de Brilho + Elevação) */
+button:hover:not(:disabled),
+a:hover:not(:disabled),
+[role="button"]:hover:not(:disabled),
+.cursor-pointer:hover:not(:disabled) {
+  animation: hoverFlash 0.35s ease-in-out 1 forwards;
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.25);
+}
+
+/* Efeito ao Clicar (Active: Botão Afundando com Feedback Tátil) */
+button:active:not(:disabled),
+a:active:not(:disabled),
+[role="button"]:active:not(:disabled),
+.cursor-pointer:active:not(:disabled) {
+  transform: translateY(0px) scale(0.96);
+  filter: brightness(0.9);
+}
+
+/* Estilização clara para botões desabilitados */
+button:disabled,
+input:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.55 !important;
+  filter: grayscale(0.2) !important;
 }

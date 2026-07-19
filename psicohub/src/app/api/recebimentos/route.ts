@@ -1,11 +1,22 @@
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+
+export const dynamic = 'force-dynamic';
 
 /**
- * API para atualizar inline dados de um recebimento (categoria e tipo_conta).
+ * API para atualizar inline dados de um recebimento (categoria e tipo_conta) no Firestore (Multi-Tenant).
  */
 export async function PUT(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { recebimentoId, campo, valor } = body;
 
@@ -44,14 +55,26 @@ export async function PUT(request: Request) {
       }
     }
 
-    // Executa a atualização no SQLite
-    db.prepare(`
-      UPDATE recebimentos
-      SET ${campo} = ?
-      WHERE id = ?
-    `).run(valor, recebimentoId);
+    // Executa a atualização no Firestore
+    const recebimentoRef = firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("recebimentos")
+      .doc(recebimentoId);
 
-    console.log(`✅ Recebimento ${recebimentoId} atualizado inline: ${campo} -> ${valor}`);
+    const doc = await recebimentoRef.get();
+    if (!doc.exists) {
+      return NextResponse.json(
+        { success: false, error: "Recebimento não encontrado." },
+        { status: 404 }
+      );
+    }
+
+    await recebimentoRef.update({
+      [campo]: valor
+    });
+
+    console.log(`✅ Recebimento ${recebimentoId} atualizado inline no Firestore: ${campo} -> ${valor}`);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("🚨 Erro na API de atualização de recebimento (PUT):", error);
