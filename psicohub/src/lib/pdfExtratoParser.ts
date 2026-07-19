@@ -1,5 +1,5 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const pdfParseModule = require("pdf-parse");
+const pdfParse = require("pdf-parse/lib/pdf-parse.js");
 
 export interface TransacaoExtratoBruto {
   data: string; // Formato "DD/MM/YYYY" ou "YYYY-MM-DD"
@@ -9,8 +9,8 @@ export interface TransacaoExtratoBruto {
 }
 
 /**
- * Função para extrair texto de qualquer PDF de extrato bancário (Nubank, Bradesco, Itaú, Inter, Santander, Alelo, Sodexo, etc.)
- * e estruturar 100% das transações financeiras sem perdas.
+ * Função para extrair texto de qualquer PDF de extrato bancário (Nubank, Bradesco, Itaú, Inter, Santander, Alelo, etc.)
+ * e estruturar 100% das transações financeiras sem perdas, totalmente compatível com Vercel Serverless.
  * 
  * @param buffer Buffer do arquivo PDF enviado no upload
  * @param nomeArquivo Nome do arquivo PDF para identificação
@@ -23,9 +23,9 @@ export async function extrairTransacoesDePdf(buffer: Buffer, nomeArquivo: string
   let transacoes: TransacaoExtratoBruto[] = [];
 
   try {
-    const parser = new pdfParseModule.PDFParse({ data: buffer });
-    const result = await parser.getText();
-    const text = result.text || (result.pages || []).map((p: any) => p.text).join("\n");
+    // pdf-parse 1.1.1 via lib/pdf-parse.js (Puro JS, sem nativos C++ e sem debug test files na Vercel)
+    const result = await pdfParse(buffer);
+    const text = result.text || "";
 
     if (!text.trim()) {
       erros.push("O arquivo PDF está vazio ou não contém texto selecionável (imagem/scan).");
@@ -48,7 +48,7 @@ export async function extrairTransacoesDePdf(buffer: Buffer, nomeArquivo: string
     }
 
     if (transacoes.length === 0) {
-      // Tentar fallback geral se a estratégia específica não encontrou itens
+      // Fallback para extrator geral se a estratégia específica não capturou linhas
       transacoes = extrairGeral(text, nomeArquivo);
     }
 

@@ -49,6 +49,13 @@ export function Sidebar({ mobileOpen, onClose, onOpenSettings }: SidebarProps) {
     }
   }, []);
 
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
+
+  // Limpa o estado de carregamento de navegação quando a rota muda
+  useEffect(() => {
+    setNavigatingTo(null);
+  }, [pathname]);
+
   // Construir menu dinâmico
   const menuItems = [...baseMenuItems];
   if (session?.role === "suporte") {
@@ -111,20 +118,27 @@ export function Sidebar({ mobileOpen, onClose, onOpenSettings }: SidebarProps) {
       {/* Links de Navegação Principal (Espaçamento interno compacto para não gerar scrollbar) */}
       <div className="flex-1 px-2.5 flex flex-col gap-0.5 font-label-md text-label-md overflow-y-auto">
         {menuItems.map((item) => {
-          const isActive = pathname === item.path;
+          const isActive = pathname === item.path || navigatingTo === item.path;
+          const isPending = navigatingTo === item.path && pathname !== item.path;
+
           return (
             <Link
               key={item.path}
               href={item.path}
-              onClick={onClose}
+              onClick={() => {
+                if (pathname !== item.path) {
+                  setNavigatingTo(item.path);
+                }
+                onClose?.();
+              }}
               className={`flex items-center gap-3 px-3 py-1.5 rounded-lg transition-all duration-150 text-xs ${
                 isActive
-                  ? "bg-secondary-container text-on-secondary-container border-l-2 border-primary font-bold"
+                  ? "bg-secondary-container text-on-secondary-container border-l-2 border-primary font-bold shadow-sm"
                   : "text-on-surface-variant hover:bg-surface-container-high opacity-85 hover:opacity-100"
               }`}
             >
-              <span className="material-symbols-outlined text-[18px] shrink-0">
-                {item.icon}
+              <span className={`material-symbols-outlined text-[18px] shrink-0 ${isPending ? "animate-spin text-primary" : ""}`}>
+                {isPending ? "progress_activity" : item.icon}
               </span>
               <span className="truncate">{item.name}</span>
             </Link>
