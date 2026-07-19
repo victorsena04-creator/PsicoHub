@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
-import { exec } from "child_process";
-import { promisify } from "util";
-import path from "path";
-import fs from "fs";
-import db from "@/lib/db";
-
-const execAsync = promisify(exec);
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
+import { extrairTransacoesDePdf } from "@/lib/pdfExtratoParser";
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +16,14 @@ function normalizarTexto(texto: string): string {
 
 export async function POST(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
 
@@ -30,145 +34,89 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. Criar diretório temporário se não existir
-    const tmpDir = path.join(process.cwd(), ".tmp");
-    if (!fs.existsSync(tmpDir)) {
-      fs.mkdirSync(tmpDir, { recursive: true });
-    }
-
-    // Buscar lista de termos a desconsiderar no SQLite local (aprendizado contínuo)
-    let ignoreListPath = "";
-    try {
-      const termosDb = db.prepare("SELECT termo FROM termos_ignorar_extrato").all() as { termo: string }[];
-      if (termosDb.length > 0) {
-        const ignoreList = termosDb.map(t => t.termo);
-        const ignoreFileName = `ignore-${Date.now()}.json`;
-        ignoreListPath = path.join(tmpDir, ignoreFileName);
-        fs.writeFileSync(ignoreListPath, JSON.stringify(ignoreList, null, 2), "utf-8");
-      }
-    } catch (dbErr) {
-      console.warn("⚠️ Não foi possível carregar a lista de termos a ignorar:", dbErr);
-    }
-
-    // 2. Gravar o PDF temporário
+    // 1. Converter arquivo PDF para Buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const tempFileName = `extrato-${Date.now()}.pdf`;
-    const tempFilePath = path.join(tmpDir, tempFileName);
-    fs.writeFileSync(tempFilePath, buffer);
 
-    // 3. Definir caminhos para rodar o script Python
-    const pythonScriptPath = "c:\\Users\\victo\\OneDrive\\Desenvolvimento\\Projetos\\extratos-bancarios\\extrator_extrato.py";
-    const outTempDir = path.join(tmpDir, `out-${Date.now()}`);
+    // 2. Extrair transações usando o leitor nativo em JS (pdf-parse)
+    const { transacoes: transacoesBrutas, erros } = await extrairTransacoesDePdf(buffer, file.name);
 
-    // Executar o Python via subprocesso
-    // Passamos --json para obter a saída estruturada e --sem-classificacao porque a classificação
-    // será feita pelo Next.js baseada no banco de dados SQLite local.
-    const ignoreArg = ignoreListPath ? `--ignore-list "${ignoreListPath}"` : "";
-    const command = `python "${pythonScriptPath}" --json -i "${tempFilePath}" -o "${outTempDir}" --sem-classificacao ${ignoreArg}`;
-
-    console.log(`Executing: ${command}`);
-    
-    let pythonOutput = "";
-    try {
-      const { stdout } = await execAsync(command);
-      pythonOutput = stdout.trim();
-    } catch (execErr: any) {
-      console.warn("⚠️ Comando 'python' falhou. Tentando executar com 'py'...", execErr.message);
-      
-      const fallbackCommand = `py "${pythonScriptPath}" --json -i "${tempFilePath}" -o "${outTempDir}" --sem-classificacao ${ignoreArg}`;
-      try {
-        const { stdout } = await execAsync(fallbackCommand);
-        pythonOutput = stdout.trim();
-      } catch (fallbackErr: any) {
-        console.error("🚨 Ambos os comandos 'python' e 'py' falharam:", fallbackErr);
-        // Limpeza dos arquivos temporários
-        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
-        if (ignoreListPath && fs.existsSync(ignoreListPath)) fs.unlinkSync(ignoreListPath);
-        if (fs.existsSync(outTempDir)) fs.rmSync(outTempDir, { recursive: true, force: true });
-
-        return NextResponse.json(
-          { success: false, error: `Falha ao processar o extrato PDF: ${fallbackErr.stderr || fallbackErr.message}` },
-          { status: 500 }
-        );
-      }
+    if (transacoesBrutas.length === 0) {
+      return NextResponse.json({
+        success: true,
+        status_geral: "aviso",
+        transacoes: [],
+        erros: erros.length > 0 ? erros : ["Nenhuma transação financeira encontrada no PDF."]
+      });
     }
 
-    // Limpeza dos arquivos temporários
-    if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
-    if (ignoreListPath && fs.existsSync(ignoreListPath)) fs.unlinkSync(ignoreListPath);
-    if (fs.existsSync(outTempDir)) fs.rmSync(outTempDir, { recursive: true, force: true });
+    // 3. Buscar no Firestore as regras de classificação e os termos a ignorar do consultório
+    const [regrasSnapshot, ignorarSnapshot] = await Promise.all([
+      firestore
+        .collection("consultorios")
+        .doc(sessao.consultorioId)
+        .collection("regras_classificacao")
+        .get(),
+      firestore
+        .collection("consultorios")
+        .doc(sessao.consultorioId)
+        .collection("termos_ignorar")
+        .get()
+    ]);
 
-    // 4. Parse da saída do script Python
-    let parsedData: any;
-    try {
-      parsedData = JSON.parse(pythonOutput);
-    } catch (parseErr) {
-      console.error("🚨 Falha ao fazer parse do JSON retornado pelo Python:", pythonOutput);
-      return NextResponse.json(
-        { success: false, error: "Erro de processamento: O analisador de PDF retornou uma resposta inválida." },
-        { status: 500 }
-      );
-    }
+    const regras = regrasSnapshot.docs.map(doc => doc.data() as any);
+    const termosIgnorarSet = new Set(ignorarSnapshot.docs.map(doc => normalizarTexto(doc.data().termo || "")));
 
-    const { transacoes = [], erros = [], status_geral = "sucesso" } = parsedData;
-
-    // 5. Buscar as regras de classificação cadastradas no SQLite local
-    const regras = db.prepare("SELECT * FROM regras_classificacao").all() as {
-      id: string;
-      termo_chave: string;
-      categoria: string;
-      tipo_conta: "PF" | "PJ";
-    }[];
-
-    // Mapear regras para facilitar o cruzamento
     const regrasNormalizadas = regras.map(r => ({
       ...r,
-      termo_chave_norm: normalizarTexto(r.termo_chave)
+      termo_chave_norm: normalizarTexto(r.termo_chave || "")
     }));
 
-    // 6. Enriquecer/classificar as transações brutas
-    const transacoesClassificadas = transacoes.map((t: any, idx: number) => {
-      const descNorm = normalizarTexto(t.descricao);
-      let categoria: string | null = null;
-      let tipo_conta: "PF" | "PJ" | null = null;
-      let regra_id: string | null = null;
+    // 4. Enriquecer e classificar transações
+    const transacoesClassificadas = transacoesBrutas
+      .filter(t => {
+        const descNorm = normalizarTexto(t.descricao);
+        return !termosIgnorarSet.has(descNorm);
+      })
+      .map((t, idx) => {
+        const descNorm = normalizarTexto(t.descricao);
+        let categoria: string | null = null;
+        let tipo_conta: "PF" | "PJ" | null = null;
+        let regra_id: string | null = null;
 
-      // Procurar match de regra
-      for (const regra of regrasNormalizadas) {
-        if (descNorm.includes(regra.termo_chave_norm)) {
-          categoria = regra.categoria;
-          tipo_conta = regra.tipo_conta;
-          regra_id = regra.id;
-          break;
+        // Procurar correspondência com regras do consultório
+        for (const regra of regrasNormalizadas) {
+          if (regra.termo_chave_norm && descNorm.includes(regra.termo_chave_norm)) {
+            categoria = regra.categoria;
+            tipo_conta = regra.tipo_conta;
+            regra_id = regra.id;
+            break;
+          }
         }
-      }
 
-      const valor = parseFloat(t.valor);
-      
-      return {
-        id: `t-import-${idx}-${Date.now()}`,
-        data: t.data,
-        descricao: t.descricao,
-        valor,
-        arquivo_origem: t.arquivo_origem,
-        status_confronto: t.status_confronto || "sucesso",
-        categoria: categoria || "FALTA IDENTIFICAR",
-        tipo_conta: tipo_conta || (valor > 0 ? "PJ" : null),
-        regra_aplicada_id: regra_id,
-        ja_classificado: categoria !== null
-      };
-    });
+        return {
+          id: `t-import-${idx}-${Date.now()}`,
+          data: t.data,
+          descricao: t.descricao,
+          valor: t.valor,
+          arquivo_origem: t.arquivo_origem || file.name,
+          status_confronto: "sucesso",
+          categoria: categoria || "FALTA IDENTIFICAR",
+          tipo_conta: tipo_conta || (t.valor > 0 ? "PJ" : null),
+          regra_aplicada_id: regra_id,
+          ja_classificado: categoria !== null
+        };
+      });
 
     return NextResponse.json({
       success: true,
-      status_geral,
+      status_geral: "sucesso",
       transacoes: transacoesClassificadas,
       erros
     });
 
   } catch (error: any) {
-    console.error("🚨 Erro geral na API de importação de extrato:", error);
+    console.error("🚨 Erro na API de importação de extrato:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Erro interno do servidor." },
       { status: 500 }

@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
-import crypto from "crypto";
+import { firestore } from "@/lib/firebaseAdmin";
+import { obterSessao } from "@/lib/sessao";
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { termo_chave, categoria, tipo_conta } = body;
 
@@ -16,17 +24,25 @@ export async function POST(request: Request) {
       );
     }
 
-    const id = crypto.randomUUID();
+    // Gravar regra de classificação no Firestore
+    const regraRef = firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("regras_classificacao")
+      .doc();
 
-    // Inserir ou substituir a regra de classificação no SQLite.
-    // Se o termo_chave já existir no banco, ele atualiza a categoria e o tipo de conta correspondentes.
-    db.prepare(`
-      INSERT OR REPLACE INTO regras_classificacao (id, termo_chave, categoria, tipo_conta)
-      VALUES (?, ?, ?, ?)
-    `).run(id, termo_chave.trim(), categoria, tipo_conta);
+    const novaRegra = {
+      id: regraRef.id,
+      termo_chave: termo_chave.trim(),
+      categoria,
+      tipo_conta,
+      created_at: new Date().toISOString()
+    };
 
-    console.log(`✅ Nova regra de classificação cadastrada: "${termo_chave}" -> ${categoria} (${tipo_conta})`);
-    return NextResponse.json({ success: true, id });
+    await regraRef.set(novaRegra);
+
+    console.log(`✅ Nova regra de classificação cadastrada no Firestore: "${termo_chave}" -> ${categoria} (${tipo_conta})`);
+    return NextResponse.json({ success: true, id: regraRef.id });
 
   } catch (error: any) {
     console.error("🚨 Erro na API de cadastro de regra de classificação:", error);
