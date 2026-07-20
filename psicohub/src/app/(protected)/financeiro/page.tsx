@@ -39,9 +39,9 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
   const busca = searchParams.busca || "";
 
   const now = new Date();
-  // Inicialização padrão do filtro de mês e ano
-  const mes = searchParams.mes !== undefined ? searchParams.mes : String(now.getMonth() + 1).padStart(2, '0');
-  const ano = searchParams.ano !== undefined ? searchParams.ano : String(now.getFullYear());
+  // Se o parâmetro não foi passado ou for vazio, fica em branco para refletir "Todos os Meses"
+  const mes = searchParams.mes !== undefined ? searchParams.mes : "";
+  const ano = searchParams.ano !== undefined ? searchParams.ano : "";
 
   const tipoContaFiltro = filtro === "consolidado" ? null : filtro.toUpperCase();
 
@@ -60,9 +60,12 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
 
   const filtrarPorMesAno = (dataStr: string) => {
     if (!dataStr) return false;
+    if (!mes && !ano) return true; // Visão Geral: Retorna tudo se Todos os Meses estiver selecionado
     const datePart = dataStr.split(" ")[0]; // Pega YYYY-MM-DD
     const [cAno, cMes] = datePart.split("-");
-    return cAno === ano && cMes === mes;
+    const matchAno = ano ? cAno === ano : true;
+    const matchMes = mes ? cMes === mes : true;
+    return matchAno && matchMes;
   };
 
   // 1. Entradas no mês/período selecionado

@@ -29,8 +29,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   // Pegar mês e ano correntes ou vindo dos filtros da URL
   const now = new Date();
-  const mes = searchParams.mes !== undefined ? String(searchParams.mes).padStart(2, '0') : String(now.getMonth() + 1).padStart(2, '0');
-  const ano = searchParams.ano !== undefined ? String(searchParams.ano) : String(now.getFullYear());
+  const mes = searchParams.mes !== undefined ? String(searchParams.mes).padStart(2, '0') : "";
+  const ano = searchParams.ano !== undefined ? String(searchParams.ano) : "";
 
   const mesNum = mes ? parseInt(mes, 10) : 0;
   const anoNum = ano ? parseInt(ano, 10) : 0;
@@ -53,10 +53,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   // Função auxiliar para verificar se uma data corresponde ao mês e ano selecionados
   const filtrarPorMesAno = (dataHoraStr: string) => {
     if (!dataHoraStr) return false;
+    if (!mes && !ano) return true; // Visão Geral: Retorna tudo se Todos os Meses estiver ativo
     const datePart = dataHoraStr.split(" ")[0]; // Pega YYYY-MM-DD
     if (!datePart) return false;
     const [cAno, cMes] = datePart.split("-");
-    return cAno === ano && cMes === mes;
+    const matchAno = ano ? cAno === ano : true;
+    const matchMes = mes ? cMes === mes : true;
+    return matchAno && matchMes;
   };
 
   // 1. Faturado (Consultas realizadas no período) - Exclusivo PJ / Consolidado

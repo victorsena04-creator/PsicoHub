@@ -43,8 +43,8 @@ export default async function RecebimentosPage({ searchParams }: PageProps) {
   const contextoFiltro = searchParams.contexto || "todos";
   
   const now = new Date();
-  const mes = searchParams.mes !== undefined ? searchParams.mes : String(now.getMonth() + 1).padStart(2, '0');
-  const ano = searchParams.ano !== undefined ? searchParams.ano : String(now.getFullYear());
+  const mes = searchParams.mes !== undefined ? searchParams.mes : "";
+  const ano = searchParams.ano !== undefined ? searchParams.ano : "";
 
   // --- QUERIES NO CLOUD FIRESTORE (Executadas em paralelo) ---
   const [recebimentosSnapshot, pacientesSnapshot, consultasSnapshot] = await Promise.all([
@@ -61,9 +61,12 @@ export default async function RecebimentosPage({ searchParams }: PageProps) {
 
   const filtrarPorMesAno = (dataStr: string) => {
     if (!dataStr) return false;
+    if (!mes && !ano) return true; // Visão Geral: Exibe tudo sem filtrar mês/ano
     const datePart = dataStr.split(" ")[0]; // Pega YYYY-MM-DD
     const [cAno, cMes] = datePart.split("-");
-    return cAno === ano && cMes === mes;
+    const matchAno = ano ? cAno === ano : true;
+    const matchMes = mes ? cMes === mes : true;
+    return matchAno && matchMes;
   };
 
   let recebimentos = recebimentosData.map(r => {
