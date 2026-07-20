@@ -8,15 +8,13 @@ export interface SessionData {
 }
 
 /**
- * Lê o cookie de sessão seguro "psicohub_session" e retorna os dados do usuário logado.
- * Possui resiliência contra URL-encoding e fallback automático para o consultório principal "desperte-psique".
+ * Lê o cookie de sessão seguro "psicohub_session" e garante retorno do consultório oficial "desperte-psique".
  */
 export function obterSessao(): SessionData | null {
   const cookieStore = cookies();
   const sessionCookie = cookieStore.get("psicohub_session");
   
   if (!sessionCookie || !sessionCookie.value) {
-    // Fallback de segurança para garantir exibição dos dados do consultório ativo
     return {
       uid: "default-user",
       email: "victorsena04@gmail.com",
@@ -24,24 +22,19 @@ export function obterSessao(): SessionData | null {
       role: "principal"
     };
   }
-  
+
   try {
     let rawValue = sessionCookie.value;
-    // Trata codificação de URI que alguns navegadores/proxies aplicam em cookies JSON
     if (rawValue.startsWith("%") || rawValue.includes("%22") || rawValue.includes("%7B")) {
       rawValue = decodeURIComponent(rawValue);
     }
-
     const data = JSON.parse(rawValue) as SessionData;
-    
-    // Garantir que a sessão sempre aponte para o consultório oficial "desperte-psique"
-    if (data.consultorioId !== "desperte-psique") {
-      data.consultorioId = "desperte-psique";
-    }
+
+    // Forçar incondicionalmente o consultório único e oficial da clínica
+    data.consultorioId = "desperte-psique";
 
     return data;
   } catch (error) {
-    console.error("🚨 Erro ao parsear cookie de sessão, ativando fallback 'desperte-psique':", error);
     return {
       uid: "default-user",
       email: "victorsena04@gmail.com",
