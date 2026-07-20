@@ -20,7 +20,14 @@ export function obterSessao(): SessionData | null {
   }
   
   try {
-    return JSON.parse(sessionCookie.value) as SessionData;
+    const data = JSON.parse(sessionCookie.value) as SessionData;
+    
+    // Se o cookie de sessão mantiver "dev-admin" ou estiver em branco, corrige para o consultório oficial "desperte-psique"
+    if (!data.consultorioId || data.consultorioId === "dev-admin") {
+      data.consultorioId = "desperte-psique";
+    }
+
+    return data;
   } catch (error) {
     console.error("🚨 Erro ao parsear cookie de sessão:", error);
     return null;
