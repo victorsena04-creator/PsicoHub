@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
-  const response = NextResponse.next();
   const sessionCookie = request.cookies.get("psicohub_session");
+
+  let shouldUpdateCookie = false;
+  let newCookieValue = "";
 
   if (sessionCookie && sessionCookie.value) {
     try {
@@ -13,36 +15,56 @@ export function middleware(request: NextRequest) {
       }
       const data = JSON.parse(rawValue);
 
-      // Se o consultorioId no cookie do navegador for diferente de "desperte-psique", força a correção do cookie via Set-Cookie no cabeçalho HTTP
+      // Se o consultorioId for diferente de "desperte-psique", forçamos o valor correto
       if (!data.consultorioId || data.consultorioId !== "desperte-psique") {
         data.consultorioId = "desperte-psique";
-        const newCookieValue = JSON.stringify(data);
-
-        response.cookies.set("psicohub_session", newCookieValue, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          maxAge: 60 * 60 * 24 * 7,
-          path: "/"
-        });
+        newCookieValue = JSON.stringify(data);
+        shouldUpdateCookie = true;
       }
     } catch (e) {
-      // Se o cookie estiver corrompido ou ilegível, injeta a sessão limpa apontando para "desperte-psique"
-      const defaultSession = JSON.stringify({
+      newCookieValue = JSON.stringify({
         uid: "default-user",
         email: "victorsena04@gmail.com",
         consultorioId: "desperte-psique",
         role: "principal"
       });
-      response.cookies.set("psicohub_session", defaultSession, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 60 * 60 * 24 * 7,
-        path: "/"
-      });
+      shouldUpdateCookie = true;
     }
+  } else {
+    // Se não houver cookie, injeta a sessão padrão apontando para "desperte-psique"
+    newCookieValue = JSON.stringify({
+      uid: "default-user",
+      email: "victorsena04@gmail.com",
+      consultorioId: "desperte-psique",
+      role: "principal"
+    });
+    shouldUpdateCookie = true;
   }
 
-  return response;
+  // Se o cookie precisa ser atualizado:
+  if (shouldUpdateCookie && newCookieValue) {
+    const requestHeaders = new Headers(request.headers);
+    // Atualiza o header de cookie da requisição de entrada para que os Server Components leiam desperte-psique na MESMA requisição
+    requestHeaders.set("cookie", `psicohub_session=${encodeURIComponent(newCookieValue)}`);
+
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+
+    // Envia o Set-Cookie no cabeçalho HTTP de resposta para atualizar o cookie no navegador do usuário
+    response.cookies.set("psicohub_session", newCookieValue, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/"
+    });
+
+    return response;
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
