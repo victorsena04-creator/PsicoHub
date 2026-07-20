@@ -70,7 +70,13 @@ export async function GET(request: Request) {
       novaVersaoDisponivel: false,
       versaoLocal,
       versaoRemota: versaoLocal,
-      commit: "2f696d8-desperte-psique-force",
+      commit: "v2.0-firebase-check",
+      firebaseConfigured: {
+        hasProjectId: !!process.env.FIREBASE_PROJECT_ID,
+        hasClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+        hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+        projectIdVal: process.env.FIREBASE_PROJECT_ID || "NENHUM"
+      },
       timestamp: new Date().toISOString()
     });
 
