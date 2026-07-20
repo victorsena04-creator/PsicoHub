@@ -69,11 +69,34 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
 
   // --- PROCESSAMENTO NO SERVIDOR (JS IN-MEMORY) ---
 
-  const filtrarPorMesAno = (dataStr: string) => {
+  const stringifyData = (val: any): string => {
+    if (!val) return "";
+    if (typeof val === "string") return val;
+    if (typeof val === "object" && val !== null) {
+      if ("toDate" in val && typeof val.toDate === "function") {
+        try { return val.toDate().toISOString().replace("T", " ").substring(0, 19); } catch (e) {}
+      }
+      if ("_seconds" in val && typeof val._seconds === "number") {
+        try { return new Date(val._seconds * 1000).toISOString().replace("T", " ").substring(0, 19); } catch (e) {}
+      }
+      if ("seconds" in val && typeof val.seconds === "number") {
+        try { return new Date(val.seconds * 1000).toISOString().replace("T", " ").substring(0, 19); } catch (e) {}
+      }
+      if (val instanceof Date) {
+        try { return val.toISOString().replace("T", " ").substring(0, 19); } catch (e) {}
+      }
+    }
+    return String(val);
+  };
+
+  const filtrarPorMesAno = (dataInput: any) => {
+    const dataStr = stringifyData(dataInput);
     if (!dataStr) return false;
     if (!mes && !ano) return true; // Visão Geral: Retorna tudo se Todos os Meses estiver selecionado
-    const datePart = dataStr.split(" ")[0]; // Pega YYYY-MM-DD
-    const [cAno, cMes] = datePart.split("-");
+    const datePart = dataStr.split(" ")[0] || dataStr.split("T")[0] || ""; // Pega YYYY-MM-DD
+    const parts = datePart.split("-");
+    const cAno = parts[0] || "";
+    const cMes = parts[1] || "";
     const matchAno = ano ? cAno === ano : true;
     const matchMes = mes ? cMes === mes : true;
     return matchAno && matchMes;
@@ -133,30 +156,30 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
   }));
   receitasCategorias.sort((a, b) => b.total - a.total);
 
-  // 6. União de Lançamentos (UNION ALL simulado)
+  // 6. União de Lançamentos (UNION ALL simulado com sanitização estrita de tipos para React Server Components)
   const listEntradas = recebimentos
     .filter(r => r.status === "pago" && r.data_pagamento)
     .map(r => {
       const pac = r.paciente_id ? pacientesMap.get(r.paciente_id) : null;
       return {
         direcao: "entrada" as const,
-        id: r.id,
-        data: r.data_pagamento,
-        descricao: `Consulta - ${pac?.nome || "Lançamento Avulso (Extrato)"}`,
-        categoria: r.categoria || "atendimento",
-        tipo_conta: r.tipo_conta as "PF" | "PJ",
-        valor: r.valor || 0
+        id: String(r.id || ""),
+        data: stringifyData(r.data_pagamento),
+        descricao: String(`Consulta - ${pac?.nome || "Lançamento Avulso (Extrato)"}`),
+        categoria: String(r.categoria || "atendimento"),
+        tipo_conta: (r.tipo_conta || "PJ") as "PF" | "PJ",
+        valor: Number(r.valor || 0)
       };
     });
 
   const listSaidas = despesasData.map(d => ({
     direcao: "saida" as const,
-    id: d.id,
-    data: d.data,
-    descricao: d.descricao,
-    categoria: d.categoria || "outros",
-    tipo_conta: d.tipo_conta as "PF" | "PJ",
-    valor: d.valor || 0
+    id: String(d.id || ""),
+    data: stringifyData(d.data),
+    descricao: String(d.descricao || ""),
+    categoria: String(d.categoria || "outros"),
+    tipo_conta: (d.tipo_conta || "PJ") as "PF" | "PJ",
+    valor: Number(d.valor || 0)
   }));
 
   // Combinar e aplicar filtros finais (tipo_conta, busca, mes/ano)
@@ -177,8 +200,13 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
     return matchTipo && matchData && matchBusca;
   });
 
-  // Ordenar decrescente por data
-  lancamentos.sort((a, b) => b.data.localeCompare(a.data));
+  // Ordenar decrescente por data com tratamento seguro contra nulos
+  lancamentos.sort((a, b) => stringifyData(b.data).localeCompare(stringifyData(a.data)));
+
+  // Garantir serialização 100% JSON pura para props transmitidas do servidor para o cliente
+  const safeDespesasCategorias = JSON.parse(JSON.stringify(despesasCategorias));
+  const safeReceitasCategorias = JSON.parse(JSON.stringify(receitasCategorias));
+  const safeLancamentos = JSON.parse(JSON.stringify(lancamentos));
 
   return (
     <div className="w-full">
@@ -288,11 +316,11 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
 
       {/* Seção de Gráficos Analíticos Dinâmicos */}
       <GraficosDashboard
-        entradasTotal={entradasTotal}
-        saidasTotal={saidasTotal}
-        saldoTotal={saldoPeriodoTotal}
-        despesasCategorias={despesasCategorias}
-        receitasCategorias={receitasCategorias}
+        entradasTotal={Number(entradasTotal || 0)}
+        saidasTotal={Number(saidasTotal || 0)}
+        saldoTotal={Number(saldoPeriodoTotal || 0)}
+        despesasCategorias={safeDespesasCategorias}
+        receitasCategorias={safeReceitasCategorias}
         filtroAtivo={filtro}
       />
 
@@ -319,7 +347,7 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
       </div>
 
       {/* Lista de Transações (Componente Interativo do Cliente) */}
-      <LancamentosTable lancamentos={lancamentos} />
+      <LancamentosTable lancamentos={safeLancamentos} />
     </div>
   );
 }
