@@ -31,24 +31,22 @@ export async function POST(request: Request) {
     let role: "principal" | "suporte" = "principal";
     let isDev = email.toLowerCase() === (process.env.DEV_EMAIL || "").toLowerCase();
 
-    // 2. Verificar se o e-mail corresponde ao Desenvolvedor Administrador
-    if (isDev) {
-      // O desenvolvedor administrador tem um ID de consultório especial e papel principal
-      consultorioId = "dev-admin";
-      role = "principal";
-      console.log(`💻 Desenvolvedor "${email}" autenticado com sucesso.`);
-    } else {
-      // 3. Buscar o usuário correspondente no Firestore global
-      const userDoc = await firestore.collection("usuarios").doc(email.toLowerCase()).get();
-      const userData = userDoc.data();
+    // 2. Buscar o usuário correspondente no Firestore global
+    const userDoc = await firestore.collection("usuarios").doc(email.toLowerCase()).get();
+    const userData = userDoc.data();
 
-      if (!userDoc.exists || !userData) {
+    if (!userDoc.exists || !userData) {
+      // Se for Dev Admin e não tiver doc cadastrado, usa desperte-psique como fallback
+      if (isDev) {
+        consultorioId = "desperte-psique";
+        role = "principal";
+      } else {
         return NextResponse.json(
           { success: false, error: "Este e-mail do Google não está autorizado a acessar o sistema." },
           { status: 401 }
         );
       }
-
+    } else {
       if (userData.ativo === 0) {
         return NextResponse.json(
           { success: false, error: "Seu acesso está inativo. Entre em contato com o suporte." },
@@ -56,10 +54,11 @@ export async function POST(request: Request) {
         );
       }
 
-      consultorioId = userData.consultorioId;
+      consultorioId = userData.consultorioId || (isDev ? "desperte-psique" : "consultorio-principal");
       role = userData.role || "principal";
-      console.log(`🔑 Usuário "${email}" autenticado com sucesso (Consultório: ${consultorioId}, Papel: ${role}).`);
     }
+
+    console.log(`🔑 Usuário "${email}" autenticado com sucesso (Consultório: ${consultorioId}, Papel: ${role}, Dev: ${isDev}).`);
 
     // 4. Gravar o cookie HTTP-Only seguro de sessão no navegador
     const cookieStore = cookies();
