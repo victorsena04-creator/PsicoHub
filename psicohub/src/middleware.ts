@@ -4,8 +4,8 @@ import type { NextRequest } from "next/server";
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Ignorar arquivos estáticos e assets
-  if (pathname.startsWith("/_next") || pathname.startsWith("/favicon.ico") || pathname.includes(".")) {
+  // Ignorar arquivos estáticos, assets e rota de bypass dev
+  if (pathname.startsWith("/_next") || pathname.startsWith("/favicon.ico") || pathname.startsWith("/api/dev/entrar") || pathname.includes(".")) {
     return NextResponse.next();
   }
 
