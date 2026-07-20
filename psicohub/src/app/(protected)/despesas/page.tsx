@@ -49,8 +49,11 @@ export default async function DespesasPage({ searchParams }: PageProps) {
   // Filtros ativos na URL
   const filtro = searchParams.filtro || "consolidado";
   const now = new Date();
-  const mes = searchParams.mes !== undefined ? searchParams.mes : String(now.getMonth() + 1).padStart(2, '0');
-  const ano = searchParams.ano !== undefined ? searchParams.ano : String(now.getFullYear());
+  
+  // Se o parâmetro não foi passado, iniciamos em branco (Geral / Todos os Meses) ou com a seleção do usuário
+  const mes = searchParams.mes !== undefined ? searchParams.mes : "";
+  const ano = searchParams.ano !== undefined ? searchParams.ano : "";
+  
   const mesNum = mes ? parseInt(mes, 10) : now.getMonth() + 1;
   const anoNum = ano ? parseInt(ano, 10) : now.getFullYear();
 
@@ -74,9 +77,12 @@ export default async function DespesasPage({ searchParams }: PageProps) {
 
   const filtrarPorMesAno = (dataStr: string) => {
     if (!dataStr) return false;
+    if (!mes && !ano) return true; // Visão Geral: Exibe tudo sem filtrar mês/ano
     const datePart = dataStr.split(" ")[0]; // Pega YYYY-MM-DD
     const [cAno, cMes] = datePart.split("-");
-    return cAno === ano && cMes === mes;
+    const matchAno = ano ? cAno === ano : true;
+    const matchMes = mes ? cMes === mes : true;
+    return matchAno && matchMes;
   };
 
   // 1. Filtrar e mapear despesas
@@ -111,7 +117,13 @@ export default async function DespesasPage({ searchParams }: PageProps) {
   // 2. Calcular total de fatura para cada cartão
   const cartoesComFatura = cartoes.map(cartao => {
     const totalFatura = despesasData
-      .filter(d => d.cartao_id === cartao.id && d.fatura_mes === mesNum && d.fatura_ano === anoNum)
+      .filter(d => {
+        if (d.cartao_id !== cartao.id) return false;
+        if (!mes && !ano) return true;
+        const matchM = mes ? d.fatura_mes === mesNum : true;
+        const matchA = ano ? d.fatura_ano === anoNum : true;
+        return matchM && matchA;
+      })
       .reduce((sum, d) => sum + (d.valor || 0), 0);
 
     return {

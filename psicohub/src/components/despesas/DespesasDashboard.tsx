@@ -73,6 +73,7 @@ export function DespesasDashboard({
 
   // --- ESTADOS DA IMPORTAÇÃO E CONCILIAÇÃO DE EXTRATOS ---
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [tipoContaExtrato, setTipoContaExtrato] = useState<"PF" | "PJ">("PJ");
   const [importStatus, setImportStatus] = useState("");
   const [transacoesImportadas, setTransacoesImportadas] = useState<any[]>([]);
   const [showConciliacao, setShowConciliacao] = useState(false);
@@ -291,6 +292,7 @@ export function DespesasDashboard({
     try {
       const formData = new FormData();
       formData.append("file", pdfFile);
+      formData.append("tipo_conta", tipoContaExtrato);
 
       setImportStatus("Lendo PDF (Passagem 1: Tabelas estruturadas)...");
       
@@ -403,9 +405,29 @@ export function DespesasDashboard({
         throw new Error(dataRes.error || "Erro ao gravar lançamentos no banco de dados.");
       }
 
-      alert(`Sucesso! ${dataRes.count} lançamentos foram importados para o seu caixa local.`);
+      // Descobrir o mês e ano do extrato para redirecionar para a visualização correta
+      let mesDestino = "";
+      let anoDestino = "";
+      if (transacoesImportadas.length > 0 && transacoesImportadas[0].data) {
+        const dataStr = transacoesImportadas[0].data;
+        if (dataStr.includes("/")) {
+          const p = dataStr.split("/");
+          if (p.length === 3) {
+            mesDestino = p[1].padStart(2, "0");
+            anoDestino = p[2];
+          }
+        } else if (dataStr.includes("-")) {
+          const p = dataStr.split("-");
+          if (p.length === 3) {
+            mesDestino = p[1].padStart(2, "0");
+            anoDestino = p[0];
+          }
+        }
+      }
+
+      alert(`Sucesso! ${dataRes.count} lançamentos foram importados para o seu caixa no Firebase.`);
       
-      // Resetar os estados
+      // Resetar os estados de conciliação
       setPdfFile(null);
       setImportStatus("");
       setTransacoesImportadas([]);
@@ -413,8 +435,12 @@ export function DespesasDashboard({
       setErrosLeitura([]);
       setSelectedImportedIds([]);
 
-      // Recarregar a página e voltar para aba de despesas
-      router.refresh();
+      // Se temos mês/ano do extrato, redireciona o filtro para a data do extrato
+      if (mesDestino && anoDestino) {
+        router.push(`/despesas?mes=${mesDestino}&ano=${anoDestino}&tab=despesas`);
+      } else {
+        router.refresh();
+      }
       setActiveTab("despesas");
     } catch (err: any) {
       setError(err.message || "Erro ao confirmar conciliação.");
@@ -1082,6 +1108,39 @@ export function DespesasDashboard({
             </div>
 
             <form onSubmit={handleImportPDF} className="space-y-6">
+              {/* Seletor de Titularidade (PF / PJ) */}
+              <div>
+                <label className="block font-label-sm text-label-sm text-on-surface-variant mb-2">
+                  Titularidade da Conta do Extrato (Destino dos Lançamentos)
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setTipoContaExtrato("PJ")}
+                    className={`relative flex flex-col items-start cursor-pointer rounded-lg border p-3 shadow-sm transition-all ${
+                      tipoContaExtrato === "PJ"
+                        ? "border-primary bg-primary/5 text-primary font-bold"
+                        : "border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-high"
+                    }`}
+                  >
+                    <span className="font-semibold text-xs">Pessoa Jurídica (PJ - Clínica)</span>
+                    <span className="text-[11px] opacity-75 mt-0.5">Conta bancária CNPJ da clínica</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTipoContaExtrato("PF")}
+                    className={`relative flex flex-col items-start cursor-pointer rounded-lg border p-3 shadow-sm transition-all ${
+                      tipoContaExtrato === "PF"
+                        ? "border-primary bg-primary/5 text-primary font-bold"
+                        : "border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-high"
+                    }`}
+                  >
+                    <span className="font-semibold text-xs">Pessoa Física (PF - Pessoal)</span>
+                    <span className="text-[11px] opacity-75 mt-0.5">Conta bancária pessoal CPF</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Caixa de Drag & Drop */}
               <div className="border-2 border-dashed border-outline-variant rounded-xl p-8 text-center bg-surface-container-low/20 hover:bg-surface-container-low/40 transition-colors relative cursor-pointer group">
                 <input

@@ -26,6 +26,7 @@ export async function POST(request: Request) {
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
+    const tipoContaEntrada = ((formData.get("tipo_conta") as string) || "PJ") as "PF" | "PJ";
 
     if (!file) {
       return NextResponse.json(
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
           arquivo_origem: t.arquivo_origem || file.name,
           status_confronto: "sucesso",
           categoria: categoria || "FALTA IDENTIFICAR",
-          tipo_conta: tipo_conta || (t.valor > 0 ? "PJ" : null),
+          tipo_conta: tipo_conta || tipoContaEntrada,
           regra_aplicada_id: regra_id,
           ja_classificado: categoria !== null
         };
