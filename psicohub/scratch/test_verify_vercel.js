@@ -16,28 +16,13 @@ function fetchUrl(url, cookie = "") {
   });
 }
 
-async function verificarVercelComMiddleware() {
-  console.log("📡 Testando resposta da Vercel enviando cookie com consultorioId antigo...");
+async function verificarHeadersVercel() {
+  console.log("📡 Imprimindo TODOS os cabeçalhos de resposta retornados pela Vercel...");
   
-  const cookieAntigo = `psicohub_session=${encodeURIComponent(JSON.stringify({
-    uid: "user-123",
-    email: "victorsena04@gmail.com",
-    consultorioId: "qualquer_id_antigo_qualquer",
-    role: "principal"
-  }))}`;
-
-  const res = await fetchUrl("https://psicohub-rust.vercel.app/financeiro", cookieAntigo);
+  const res = await fetchUrl("https://psicohub-rust.vercel.app/financeiro", "psicohub_session=%7B%22uid%22%3A%22user-123%22%2C%22email%22%3A%22victorsena04%40gmail.com%22%2C%22consultorioId%22%3A%22desperte-psique%22%2C%22role%22%3A%22principal%22%7D");
   
   console.log("Status Code:", res.statusCode);
-  console.log("Set-Cookie retornado pela Vercel no cabeçalho HTTP:", res.headers["set-cookie"]);
-
-  const indexSaldo = res.body.indexOf("Saldo Acumulado");
-  if (indexSaldo !== -1) {
-    console.log("\n📄 HTML retornado pelo servidor contendo Saldo:");
-    console.log(res.body.substring(indexSaldo, indexSaldo + 400));
-  } else {
-    console.log("⚠️ Não encontrou Saldo no HTML.");
-  }
+  console.log("Headers completos:", res.headers);
 }
 
-verificarVercelComMiddleware().catch(console.error);
+verificarHeadersVercel().catch(console.error);

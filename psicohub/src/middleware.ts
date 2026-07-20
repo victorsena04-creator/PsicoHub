@@ -2,8 +2,14 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
-  const sessionCookie = request.cookies.get("psicohub_session");
+  const pathname = request.nextUrl.pathname;
 
+  // Ignorar arquivos estáticos e assets
+  if (pathname.startsWith("/_next") || pathname.startsWith("/favicon.ico") || pathname.includes(".")) {
+    return NextResponse.next();
+  }
+
+  const sessionCookie = request.cookies.get("psicohub_session");
   let shouldUpdateCookie = false;
   let newCookieValue = "";
 
@@ -15,7 +21,7 @@ export function middleware(request: NextRequest) {
       }
       const data = JSON.parse(rawValue);
 
-      // Se o consultorioId for diferente de "desperte-psique", forçamos o valor correto
+      // Se o consultorioId no cookie for diferente de desperte-psique, corrigimos imediatamente
       if (!data.consultorioId || data.consultorioId !== "desperte-psique") {
         data.consultorioId = "desperte-psique";
         newCookieValue = JSON.stringify(data);
@@ -31,7 +37,7 @@ export function middleware(request: NextRequest) {
       shouldUpdateCookie = true;
     }
   } else {
-    // Se não houver cookie, injeta a sessão padrão apontando para "desperte-psique"
+    // Se não houver cookie, injeta a sessão padrão do consultório ativo
     newCookieValue = JSON.stringify({
       uid: "default-user",
       email: "victorsena04@gmail.com",
@@ -41,10 +47,8 @@ export function middleware(request: NextRequest) {
     shouldUpdateCookie = true;
   }
 
-  // Se o cookie precisa ser atualizado:
   if (shouldUpdateCookie && newCookieValue) {
     const requestHeaders = new Headers(request.headers);
-    // Atualiza o header de cookie da requisição de entrada para que os Server Components leiam desperte-psique na MESMA requisição
     requestHeaders.set("cookie", `psicohub_session=${encodeURIComponent(newCookieValue)}`);
 
     const response = NextResponse.next({
@@ -68,9 +72,3 @@ export function middleware(request: NextRequest) {
   response.headers.set("x-psicohub-middleware", "active-passthrough");
   return response;
 }
-
-export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/auth).*)",
-  ],
-};
