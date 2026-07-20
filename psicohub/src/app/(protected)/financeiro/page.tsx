@@ -43,6 +43,8 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
   const mes = searchParams.mes !== undefined ? searchParams.mes : "";
   const ano = searchParams.ano !== undefined ? searchParams.ano : "";
 
+  console.log("🔥 [FINANCEIRO PAGE] SESSAO:", sessao, "MES:", mes, "ANO:", ano, "FILTRO:", filtro);
+
   const tipoContaFiltro = filtro === "consolidado" ? null : filtro.toUpperCase();
 
   // --- QUERIES NO CLOUD FIRESTORE (Executadas em paralelo) ---

@@ -53,6 +53,8 @@ export default async function DespesasPage({ searchParams }: PageProps) {
   // Se o parâmetro não foi passado, iniciamos em branco (Geral / Todos os Meses) ou com a seleção do usuário
   const mes = searchParams.mes !== undefined ? searchParams.mes : "";
   const ano = searchParams.ano !== undefined ? searchParams.ano : "";
+
+  console.log("🔥 [DESPESAS PAGE] SESSAO:", sessao, "MES:", mes, "ANO:", ano);
   
   const mesNum = mes ? parseInt(mes, 10) : now.getMonth() + 1;
   const anoNum = ano ? parseInt(ano, 10) : now.getFullYear();
