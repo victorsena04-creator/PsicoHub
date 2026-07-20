@@ -35,7 +35,7 @@ export function obterSessao(): SessionData | null {
     const data = JSON.parse(rawValue) as SessionData;
     
     // Garantir que a sessão sempre aponte para o consultório oficial "desperte-psique"
-    if (!data.consultorioId || data.consultorioId === "dev-admin" || data.consultorioId === "consultorio-principal") {
+    if (data.consultorioId !== "desperte-psique") {
       data.consultorioId = "desperte-psique";
     }
 
