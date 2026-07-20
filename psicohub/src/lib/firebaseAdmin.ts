@@ -5,33 +5,45 @@ const globalWithFirebase = global as typeof globalThis & {
   firebaseAdminApp?: admin.app.App;
 };
 
+function getPrivateKey(): string | undefined {
+  const key = process.env.FIREBASE_PRIVATE_KEY;
+  if (!key) return undefined;
+  
+  let formatted = key.trim();
+  // Remove aspas simples ou duplas que envolvem a chave se tiverem sido coladas no painel de Env Vars
+  if ((formatted.startsWith('"') && formatted.endsWith('"')) || (formatted.startsWith("'") && formatted.endsWith("'"))) {
+    formatted = formatted.slice(1, -1);
+  }
+  // Converte \n literais para quebras de linha reais exigidas pelo OpenSSL/Firebase
+  return formatted.replace(/\\n/g, "\n");
+}
+
 const projectId = process.env.FIREBASE_PROJECT_ID;
 const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+const privateKey = getPrivateKey();
 
 if (!globalWithFirebase.firebaseAdminApp) {
-  // Em desenvolvimento local, se não houver variáveis de ambiente de conta de serviço configuradas,
-  // podemos tentar usar as credenciais padrão do Firebase (Application Default Credentials - ADC)
-  // ou emitir um alerta. No ambiente Vercel, as variáveis estarão configuradas no painel.
   if (projectId && clientEmail && privateKey) {
-    const formattedPrivateKey = privateKey.replace(/\\n/g, "\n");
-    
-    globalWithFirebase.firebaseAdminApp = admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey: formattedPrivateKey,
-      }),
-    });
-    console.log("🔥 Firebase Admin SDK inicializado com sucesso via Conta de Serviço.");
-  } else {
-    // Caso as credenciais não estejam no .env, avisa no console e tenta inicialização padrão (caso rode em GCP/Firebase CLI local)
-    console.warn("⚠️ Credenciais completas do Firebase Admin não encontradas no arquivo .env. Tentando inicialização padrão...");
+    try {
+      globalWithFirebase.firebaseAdminApp = admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
+      });
+      console.log("🔥 Firebase Admin SDK inicializado com sucesso via Conta de Serviço.");
+    } catch (err) {
+      console.error("🚨 Erro ao inicializar Firebase Admin cert:", err);
+    }
+  }
+
+  if (!globalWithFirebase.firebaseAdminApp) {
     try {
       globalWithFirebase.firebaseAdminApp = admin.initializeApp();
-      console.log("🔥 Firebase Admin SDK inicializado usando credenciais do ambiente local.");
+      console.log("🔥 Firebase Admin SDK inicializado via credenciais de ambiente.");
     } catch (error) {
-      console.error("🚨 Erro crítico: Não foi possível inicializar o Firebase Admin SDK. Configure as variáveis FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL e FIREBASE_PRIVATE_KEY.");
+      console.error("🚨 Erro crítico: Não foi possível inicializar o Firebase Admin SDK.");
     }
   }
 }
@@ -41,7 +53,7 @@ export const adminApp = globalWithFirebase.firebaseAdminApp;
 export const firestore = admin.firestore();
 export const auth = admin.auth();
 
-// Configura o Firestore para ignorar campos indefinidos ao invés de lançar erro (facilita gravações de dados opcionais)
+// Configura o Firestore para ignorar campos indefinidos ao invés de lançar erro
 try {
   firestore.settings({ ignoreUndefinedProperties: true });
 } catch (e) {
