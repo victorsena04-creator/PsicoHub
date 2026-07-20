@@ -53,7 +53,7 @@ export function middleware(request: NextRequest) {
       },
     });
 
-    // Envia o Set-Cookie no cabeçalho HTTP de resposta para atualizar o cookie no navegador do usuário
+    response.headers.set("x-psicohub-middleware", "active-override");
     response.cookies.set("psicohub_session", newCookieValue, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -64,7 +64,9 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  response.headers.set("x-psicohub-middleware", "active-passthrough");
+  return response;
 }
 
 export const config = {
