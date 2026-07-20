@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "cd psicohub && npm run build",
+  "installCommand": "cd psicohub && npm install",
+  "outputDirectory": "psicohub/.next"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "psicohub-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd psicohub && npm run build",
+    "vercel-build": "cd psicohub && npm run build",
+    "dev": "cd psicohub && npm run dev"
+  }
+}
