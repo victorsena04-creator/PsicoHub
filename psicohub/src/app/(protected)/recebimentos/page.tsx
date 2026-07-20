@@ -48,16 +48,25 @@ export default async function RecebimentosPage({ searchParams }: PageProps) {
   const mes = searchParams.mes !== undefined ? searchParams.mes : "";
   const ano = searchParams.ano !== undefined ? searchParams.ano : "";
 
-  // --- QUERIES NO CLOUD FIRESTORE (Executadas em paralelo) ---
-  const [recebimentosSnapshot, pacientesSnapshot, consultasSnapshot] = await Promise.all([
-    firestore.collection("consultorios").doc(sessao.consultorioId).collection("recebimentos").get(),
-    firestore.collection("consultorios").doc(sessao.consultorioId).collection("pacientes").get(),
-    firestore.collection("consultorios").doc(sessao.consultorioId).collection("consultas").get()
-  ]);
+  const consultorioId = (sessao && sessao.consultorioId) ? sessao.consultorioId : "desperte-psique";
 
-  const recebimentosData = recebimentosSnapshot.docs.map(doc => doc.data() as any);
-  const pacientesMap = new Map(pacientesSnapshot.docs.map(doc => [doc.id, doc.data() as any]));
-  const consultasMap = new Map(consultasSnapshot.docs.map(doc => [doc.id, doc.data() as any]));
+  let recebimentosData: any[] = [];
+  let pacientesMap = new Map<string, any>();
+  let consultasMap = new Map<string, any>();
+
+  try {
+    const [recebimentosSnapshot, pacientesSnapshot, consultasSnapshot] = await Promise.all([
+      firestore.collection("consultorios").doc(consultorioId).collection("recebimentos").get(),
+      firestore.collection("consultorios").doc(consultorioId).collection("pacientes").get(),
+      firestore.collection("consultorios").doc(consultorioId).collection("consultas").get()
+    ]);
+
+    recebimentosData = recebimentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    pacientesMap = new Map(pacientesSnapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }]));
+    consultasMap = new Map(consultasSnapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }]));
+  } catch (err) {
+    console.error("🚨 Erro ao buscar recebimentos do consultório no Firestore:", err);
+  }
 
   // --- FILTRAGEM E MAPEAMENTO (UNION/JOIN SIMULADO NO JS) ---
 

@@ -61,19 +61,22 @@ export default async function DespesasPage({ searchParams }: PageProps) {
   const mesNum = mes ? parseInt(mes, 10) : now.getMonth() + 1;
   const anoNum = ano ? parseInt(ano, 10) : now.getFullYear();
 
-  const tipoContaFiltro = filtro === "consolidado" ? null : filtro.toUpperCase();
+  const consultorioId = (sessao && sessao.consultorioId) ? sessao.consultorioId : "desperte-psique";
 
-  // --- QUERIES NO CLOUD FIRESTORE (Executadas em paralelo) ---
-  const [despesasSnapshot, cartoesSnapshot] = await Promise.all([
-    firestore.collection("consultorios").doc(sessao.consultorioId).collection("despesas").get(),
-    firestore.collection("consultorios").doc(sessao.consultorioId).collection("cartoes_credito").get()
-  ]);
+  let despesasData: any[] = [];
+  let cartoes: Cartao[] = [];
 
-  const despesasData = despesasSnapshot.docs.map(doc => doc.data() as any);
-  const cartoes = cartoesSnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data() as any
-  })) as Cartao[];
+  try {
+    const [despesasSnapshot, cartoesSnapshot] = await Promise.all([
+      firestore.collection("consultorios").doc(consultorioId).collection("despesas").get(),
+      firestore.collection("consultorios").doc(consultorioId).collection("cartoes_credito").get()
+    ]);
+
+    despesasData = despesasSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    cartoes = cartoesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any })) as Cartao[];
+  } catch (err) {
+    console.error("🚨 Erro ao buscar despesas do consultório no Firestore:", err);
+  }
 
   const cartoesMap = new Map(cartoes.map(c => [c.id, c]));
 

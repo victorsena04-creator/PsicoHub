@@ -37,18 +37,28 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const mesNum = mes ? parseInt(mes, 10) : 0;
   const anoNum = ano ? parseInt(ano, 10) : 0;
 
-  // --- QUERIES NO CLOUD FIRESTORE (Executadas em paralelo) ---
-  const [consultasSnapshot, recebimentosSnapshot, despesasSnapshot, metasSnapshot] = await Promise.all([
-    firestore.collection("consultorios").doc(sessao.consultorioId).collection("consultas").get(),
-    firestore.collection("consultorios").doc(sessao.consultorioId).collection("recebimentos").get(),
-    firestore.collection("consultorios").doc(sessao.consultorioId).collection("despesas").get(),
-    firestore.collection("consultorios").doc(sessao.consultorioId).collection("metas").get()
-  ]);
+  const consultorioId = (sessao && sessao.consultorioId) ? sessao.consultorioId : "desperte-psique";
 
-  const consultas = consultasSnapshot.docs.map(doc => doc.data() as any);
-  const recebimentos = recebimentosSnapshot.docs.map(doc => doc.data() as any);
-  const despesasData = despesasSnapshot.docs.map(doc => doc.data() as any);
-  const metas = metasSnapshot.docs.map(doc => doc.data() as any);
+  let consultas: any[] = [];
+  let recebimentos: any[] = [];
+  let despesasData: any[] = [];
+  let metas: any[] = [];
+
+  try {
+    const [consultasSnapshot, recebimentosSnapshot, despesasSnapshot, metasSnapshot] = await Promise.all([
+      firestore.collection("consultorios").doc(consultorioId).collection("consultas").get(),
+      firestore.collection("consultorios").doc(consultorioId).collection("recebimentos").get(),
+      firestore.collection("consultorios").doc(consultorioId).collection("despesas").get(),
+      firestore.collection("consultorios").doc(consultorioId).collection("metas").get()
+    ]);
+
+    consultas = consultasSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    recebimentos = recebimentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    despesasData = despesasSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    metas = metasSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (err) {
+    console.error("🚨 Erro ao buscar dados do dashboard no Firestore:", err);
+  }
 
   // --- PROCESSAMENTO E FILTRAGEM DOS DADOS NO SERVIDOR (JS IN-MEMORY) ---
 

@@ -47,18 +47,25 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
 
   console.log("🔥 [FINANCEIRO PAGE] SESSAO:", sessao, "MES:", mes, "ANO:", ano, "FILTRO:", filtro);
 
-  const tipoContaFiltro = filtro === "consolidado" ? null : filtro.toUpperCase();
+  const consultorioId = (sessao && sessao.consultorioId) ? sessao.consultorioId : "desperte-psique";
 
-  // --- QUERIES NO CLOUD FIRESTORE (Executadas em paralelo) ---
-  const [recebimentosSnapshot, despesasSnapshot, pacientesSnapshot] = await Promise.all([
-    firestore.collection("consultorios").doc(sessao.consultorioId).collection("recebimentos").get(),
-    firestore.collection("consultorios").doc(sessao.consultorioId).collection("despesas").get(),
-    firestore.collection("consultorios").doc(sessao.consultorioId).collection("pacientes").get()
-  ]);
+  let recebimentos: any[] = [];
+  let despesasData: any[] = [];
+  let pacientesMap = new Map<string, any>();
 
-  const recebimentos = recebimentosSnapshot.docs.map(doc => doc.data() as any);
-  const despesasData = despesasSnapshot.docs.map(doc => doc.data() as any);
-  const pacientesMap = new Map(pacientesSnapshot.docs.map(doc => [doc.id, doc.data() as any]));
+  try {
+    const [recebimentosSnapshot, despesasSnapshot, pacientesSnapshot] = await Promise.all([
+      firestore.collection("consultorios").doc(consultorioId).collection("recebimentos").get(),
+      firestore.collection("consultorios").doc(consultorioId).collection("despesas").get(),
+      firestore.collection("consultorios").doc(consultorioId).collection("pacientes").get()
+    ]);
+
+    recebimentos = recebimentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    despesasData = despesasSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    pacientesMap = new Map(pacientesSnapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() }]));
+  } catch (err) {
+    console.error("🚨 Erro ao buscar dados do consultório no Firestore:", err);
+  }
 
   // --- PROCESSAMENTO NO SERVIDOR (JS IN-MEMORY) ---
 
