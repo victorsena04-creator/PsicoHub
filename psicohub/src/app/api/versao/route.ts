@@ -69,7 +69,9 @@ export async function GET(request: Request) {
       success: true,
       novaVersaoDisponivel: false,
       versaoLocal,
-      versaoRemota: versaoLocal
+      versaoRemota: versaoLocal,
+      commit: "2f696d8-desperte-psique-force",
+      timestamp: new Date().toISOString()
     });
 
   } catch (error: any) {
