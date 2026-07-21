@@ -31,7 +31,8 @@ interface Lancamento {
 }
 
 export default async function FinanceiroPage({ searchParams }: PageProps) {
-  const sessao = obterSessao();
+  try {
+    const sessao = obterSessao();
   if (!sessao) {
     redirect("/login");
   }
@@ -351,4 +352,18 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
       <LancamentosTable lancamentos={safeLancamentos} />
     </div>
   );
+  } catch (error: any) {
+    console.error("🚨 Erro crítico na página de Financeiro:", error);
+    return (
+      <div className="w-full p-8 bg-surface border border-error/20 rounded-xl space-y-4">
+        <h2 className="text-xl font-bold text-error">Ops! Ocorreu um erro ao carregar o painel financeiro.</h2>
+        <p className="text-sm text-on-surface-variant">
+          Detalhes técnicos do erro: <code className="bg-surface-container-high px-2 py-1 rounded text-error font-mono">{error?.message || String(error)}</code>
+        </p>
+        <Link href="/financeiro" className="inline-block bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-dark">
+          Tentar Novamente
+        </Link>
+      </div>
+    );
+  }
 }
