@@ -14,8 +14,18 @@ export async function GET(request: Request) {
 
   try {
     const { searchParams, host: urlHost } = new URL(request.url);
-    host = request.headers.get("host") || urlHost || "localhost:3000";
-    const protocol = host.startsWith("localhost") ? "http" : "https";
+    const rawHost = request.headers.get("x-forwarded-host") || request.headers.get("host") || urlHost || "localhost:3000";
+    
+    let redirect_uri: string;
+    if (process.env.NEXT_PUBLIC_APP_URL) {
+      redirect_uri = `${process.env.NEXT_PUBLIC_APP_URL}/api/integracoes/google-calendar/callback`;
+    } else if (rawHost.includes("vercel.app") || process.env.VERCEL) {
+      redirect_uri = `https://psicohub-rust.vercel.app/api/integracoes/google-calendar/callback`;
+    } else {
+      const protocol = (rawHost.startsWith("localhost") || rawHost.startsWith("127.0.0.1")) ? "http" : "https";
+      redirect_uri = `${protocol}://${rawHost}/api/integracoes/google-calendar/callback`;
+    }
+    const dashboard_url = `${redirect_uri.replace('/api/integracoes/google-calendar/callback', '')}/dashboard`;
 
     const code = searchParams.get("code");
     const errorParam = searchParams.get("error");
@@ -24,9 +34,6 @@ export async function GET(request: Request) {
     if (state) {
       consultorioId = state;
     }
-
-    const redirect_uri = `${protocol}://${host}/api/integracoes/google-calendar/callback`;
-    const dashboard_url = `${protocol}://${host}/dashboard`;
 
     // Se o usuário negou ou ocorreu algum erro de autorização no navegador
     if (errorParam || !code) {

@@ -20,10 +20,18 @@ export async function GET(request: Request) {
 
     const client_id = process.env.GOOGLE_CLIENT_ID;
     
-    // Identificar dinamicamente o host atual (local ou produção na Vercel)
-    const host = request.headers.get("host") || "localhost:3000";
-    const protocol = host.startsWith("localhost") ? "http" : "https";
-    const redirect_uri = `${protocol}://${host}/api/integracoes/google-calendar/callback`;
+    // Identificar dinamicamente o host atual (garantindo formato exato para a Vercel)
+    const rawHost = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost:3000";
+    
+    let redirect_uri: string;
+    if (process.env.NEXT_PUBLIC_APP_URL) {
+      redirect_uri = `${process.env.NEXT_PUBLIC_APP_URL}/api/integracoes/google-calendar/callback`;
+    } else if (rawHost.includes("vercel.app") || process.env.VERCEL) {
+      redirect_uri = `https://psicohub-rust.vercel.app/api/integracoes/google-calendar/callback`;
+    } else {
+      const protocol = (rawHost.startsWith("localhost") || rawHost.startsWith("127.0.0.1")) ? "http" : "https";
+      redirect_uri = `${protocol}://${rawHost}/api/integracoes/google-calendar/callback`;
+    }
 
     if (!client_id) {
       return NextResponse.json(
