@@ -39,6 +39,7 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
   // Filtros da URL
   const filtro = searchParams.filtro || "consolidado";
   const busca = searchParams.busca || "";
+  const tipoContaFiltro = filtro === "pf" ? "PF" : filtro === "pj" ? "PJ" : null;
 
   const now = new Date();
   // Se o parâmetro não foi passado ou for vazio, fica em branco para refletir "Todos os Meses"

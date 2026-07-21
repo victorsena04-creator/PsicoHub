@@ -50,6 +50,7 @@ export default async function DespesasPage({ searchParams }: PageProps) {
 
   // Filtros ativos na URL
   const filtro = searchParams.filtro || "consolidado";
+  const tipoContaFiltro = filtro === "pf" ? "PF" : filtro === "pj" ? "PJ" : null;
   const now = new Date();
   
   // Se o parâmetro não foi passado, iniciamos em branco (Geral / Todos os Meses) ou com a seleção do usuário
