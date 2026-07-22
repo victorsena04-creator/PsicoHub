@@ -152,7 +152,7 @@ export function PacientesTable({ pacientes }: PacientesTableProps) {
   return (
     <div className="relative">
       <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto min-h-[280px]">
           <table className="w-full text-left border-collapse">
             <thead>
               {/* Linha 1: Títulos das Colunas */}
