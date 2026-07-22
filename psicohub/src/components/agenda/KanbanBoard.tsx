@@ -95,6 +95,36 @@ export function KanbanBoard({ diasSemana }: KanbanBoardProps) {
     }
   };
 
+  const handleDeleteConsulta = async (consultaId: string, pacienteNome: string, dataHora: string) => {
+    const dataFormatada = dataHora.split(" ")[0].split("-").reverse().join("/");
+    const horaFormatada = dataHora.split(" ")[1];
+    
+    const confirmar = confirm(
+      `Tem certeza que deseja excluir permanentemente a consulta de ${pacienteNome} no dia ${dataFormatada} às ${horaFormatada}?\n\nEsta ação apagará a consulta no PsicoHub e no Google Agenda e não pode ser desfeita.`
+    );
+    
+    if (!confirmar) return;
+    
+    setLoadingId(consultaId);
+    try {
+      const response = await fetch(`/api/consultas?id=${consultaId}`, {
+        method: "DELETE",
+      });
+      
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Erro ao excluir consulta.");
+      }
+      
+      router.refresh();
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message || "Erro ao excluir agendamento.");
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
   // Determinar em qual slot de linha (horário) a consulta deve cair
   const getSlotHora = (dataHoraStr: string): string => {
     const horaMin = dataHoraStr.split(" ")[1]; // Extrai "HH:MM"
@@ -160,16 +190,29 @@ export function KanbanBoard({ diasSemana }: KanbanBoardProps) {
         }`}
       >
         {/* Linha 1: Nome do Paciente e Valor */}
-        <div className="flex justify-between items-center gap-1.5">
+        <div className="flex justify-between items-start gap-1">
           <span 
             className="font-label-md text-[12px] text-on-background font-bold hover:text-primary transition-colors truncate flex-1" 
             title={consulta.paciente_nome}
           >
             {consulta.paciente_nome}
           </span>
-          <span className="text-[10px] font-mono-sm font-semibold text-on-surface-variant shrink-0">
-            R$ {consulta.valor_consulta}
-          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="text-[10px] font-mono-sm font-semibold text-on-surface-variant group-hover:hidden transition-all">
+              R$ {consulta.valor_consulta}
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteConsulta(consulta.id, consulta.paciente_nome, consulta.data_hora);
+              }}
+              disabled={isUpdating}
+              className="text-on-surface-variant hover:text-error transition-all duration-200 hidden group-hover:flex cursor-pointer items-center justify-center p-0.5 rounded-full hover:bg-error-container/10"
+              title="Excluir Consulta"
+            >
+              <span className="material-symbols-outlined text-[14px] leading-none">delete</span>
+            </button>
+          </div>
         </div>
 
         {/* Linha 2: Horário, Tags e Dropdown de Status */}

@@ -1,4 +1,6 @@
 import { firestore } from "@/lib/firebaseAdmin";
+import { criarEventoAgenda } from "./googleCalendar";
+
 
 /**
  * Função para auto-gerar consultas recorrentes para uma determinada semana
@@ -45,19 +47,16 @@ export async function gerarConsultasRecorrentesParaSemana(segundaFeira: Date, co
 
     const pacientesAtivos = new Set(pacientesSnapshot.docs.map(d => d.id));
     const pacientesValorMap = new Map(pacientesSnapshot.docs.map(d => [d.id, d.data().valor_consulta]));
+    const pacientesNomeMap = new Map(pacientesSnapshot.docs.map(d => [d.id, d.data().nome]));
 
     // Filtra para manter apenas agendas de pacientes que estão ativos
     const agendasBases = agendaSnapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() as any }))
       .filter(ab => pacientesAtivos.has(ab.paciente_id));
 
-    if (agendasBases.length === 0) {
-      return { success: true, geradas: 0, mensagem: "Nenhuma agenda recorrente ativa encontrada." };
-    }
-
     // Filtra localmente no JS pelas consultas que caem na semana civil atual
     const consultasSemana = consultasSnapshot.docs
-      .map(doc => doc.data() as any)
+      .map(doc => ({ id: doc.id, ...doc.data() as any }))
       .filter(c => {
         const dataPart = (c.data_hora || "").split(" ")[0];
         return dataPart >= dataSegISO && dataPart <= dataDomISO;
@@ -65,8 +64,15 @@ export async function gerarConsultasRecorrentesParaSemana(segundaFeira: Date, co
 
     const pacientesComConsulta = new Set(consultasSemana.map(c => c.paciente_id));
 
-    const batch = firestore.batch();
-    let consultasGeradasCount = 0;
+    // 1. Identificar e planejar novas consultas recorrentes a serem criadas
+    interface NovaConsulta {
+      ref: any;
+      paciente_id: string;
+      paciente_nome: string;
+      data_hora: string;
+      valor: number;
+    }
+    const novasConsultas: NovaConsulta[] = [];
 
     for (const agenda of agendasBases) {
       // Se já existe uma consulta normal do paciente na semana, não faz nada
@@ -83,7 +89,7 @@ export async function gerarConsultasRecorrentesParaSemana(segundaFeira: Date, co
       const dataAtendimentoISO = dataAtendimento.toISOString().split("T")[0];
       const dataHoraConsulta = `${dataAtendimentoISO} ${agenda.horario}`;
 
-      // Inserir a nova consulta padrão
+      // Referência para inserir a nova consulta padrão
       const consultaRef = firestore
         .collection("consultorios")
         .doc(consultorioId)
@@ -91,14 +97,41 @@ export async function gerarConsultasRecorrentesParaSemana(segundaFeira: Date, co
         .doc();
 
       const valorConsulta = pacientesValorMap.get(agenda.paciente_id) || 150.00;
+      const pacienteNome = pacientesNomeMap.get(agenda.paciente_id) || "Paciente";
 
-      batch.set(consultaRef, {
-        id: consultaRef.id,
+      novasConsultas.push({
+        ref: consultaRef,
         paciente_id: agenda.paciente_id,
+        paciente_nome: pacienteNome,
         data_hora: dataHoraConsulta,
-        valor: valorConsulta,
+        valor: valorConsulta
+      });
+    }
+
+    // 2. Criar os eventos no Google Agenda e salvar no Firestore
+    const batch = firestore.batch();
+    let consultasGeradasCount = 0;
+
+    for (const nc of novasConsultas) {
+      let googleEventId: string | null = null;
+      try {
+        googleEventId = await criarEventoAgenda(consultorioId, {
+          paciente_nome: nc.paciente_nome,
+          data_hora: nc.data_hora,
+          valor: nc.valor
+        });
+      } catch (gErr) {
+        console.warn(`⚠️ Falha ao criar compromisso no Google Agenda para recorrente ${nc.paciente_nome}:`, gErr);
+      }
+
+      batch.set(nc.ref, {
+        id: nc.ref.id,
+        paciente_id: nc.paciente_id,
+        data_hora: nc.data_hora,
+        valor: nc.valor,
         status: "agendada",
         e_excecao: 0,
+        google_event_id: googleEventId || null,
         created_at: new Date().toISOString()
       });
 
@@ -107,12 +140,49 @@ export async function gerarConsultasRecorrentesParaSemana(segundaFeira: Date, co
 
     if (consultasGeradasCount > 0) {
       await batch.commit();
-      console.log(`🌱 Auto-geradas ${consultasGeradasCount} consultas recorrentes para a semana de ${dataSegISO} a ${dataDomISO} no Firestore.`);
+      console.log(`🌱 Auto-geradas e integradas ${consultasGeradasCount} consultas recorrentes para a semana de ${dataSegISO} a ${dataDomISO} no Firestore.`);
     }
 
-    return { success: true, geradas: consultasGeradasCount };
+    // 3. Sincronização Retroativa: Encontrar consultas existentes sem google_event_id na semana
+    const consultasSemGoogle = consultasSemana.filter(c => 
+      !c.google_event_id && 
+      pacientesAtivos.has(c.paciente_id) && 
+      c.status !== "cancelada"
+    );
+
+    let retroativasSincronizadas = 0;
+    for (const c of consultasSemGoogle) {
+      const pacienteNome = pacientesNomeMap.get(c.paciente_id) || "Paciente";
+      try {
+        const googleEventId = await criarEventoAgenda(consultorioId, {
+          paciente_nome: pacienteNome,
+          data_hora: c.data_hora,
+          valor: c.valor
+        });
+
+        if (googleEventId) {
+          await firestore
+            .collection("consultorios")
+            .doc(consultorioId)
+            .collection("consultas")
+            .doc(c.id)
+            .update({ google_event_id: googleEventId });
+
+          retroativasSincronizadas++;
+        }
+      } catch (gErr) {
+        console.warn(`⚠️ Falha ao sincronizar retroativamente consulta ${c.id}:`, gErr);
+      }
+    }
+
+    if (retroativasSincronizadas > 0) {
+      console.log(`🔄 Sincronizadas retroativamente ${retroativasSincronizadas} consultas no Google Agenda.`);
+    }
+
+    return { success: true, geradas: consultasGeradasCount, retroativas: retroativasSincronizadas };
   } catch (error: any) {
     console.error("🚨 Erro ao auto-gerar consultas recorrentes no Firestore:", error);
     throw error;
   }
 }
+

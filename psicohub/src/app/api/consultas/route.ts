@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { firestore } from "@/lib/firebaseAdmin";
 import { obterSessao } from "@/lib/sessao";
-import { criarEventoAgenda, atualizarEventoAgenda } from "@/lib/googleCalendar";
+import { criarEventoAgenda, atualizarEventoAgenda, deletarEventoAgenda } from "@/lib/googleCalendar";
 
 export const dynamic = 'force-dynamic';
 
@@ -213,3 +213,91 @@ export async function PUT(request: Request) {
     );
   }
 }
+
+// DELETE: Excluir consulta física do sistema e do Google Agenda
+export async function DELETE(request: Request) {
+  try {
+    const sessao = obterSessao();
+    if (!sessao) {
+      return NextResponse.json(
+        { success: false, error: "Não autorizado." },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: "O ID da consulta é obrigatório." },
+        { status: 400 }
+      );
+    }
+
+    // 1. Obter dados da consulta para recuperar o google_event_id
+    const consultaRef = firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("consultas")
+      .doc(id);
+
+    const consultaDoc = await consultaRef.get();
+    if (!consultaDoc.exists) {
+      return NextResponse.json(
+        { success: false, error: "Consulta não encontrada no sistema." },
+        { status: 404 }
+      );
+    }
+
+    const consultaData = consultaDoc.data();
+
+    // 2. Se houver evento vinculado na Google Agenda, deletá-lo
+    if (consultaData?.google_event_id) {
+      try {
+        await deletarEventoAgenda(sessao.consultorioId, consultaData.google_event_id);
+        console.log(`🗑️ Evento correspondente no Google Agenda deletado: ${consultaData.google_event_id}`);
+      } catch (gErr) {
+        console.warn("⚠️ Falha ao deletar evento correspondente no Google Agenda:", gErr);
+      }
+    }
+
+    // 3. Deletar lançamentos financeiros pendentes ou atrasados vinculados a esta consulta
+    const recebimentosQuery = await firestore
+      .collection("consultorios")
+      .doc(sessao.consultorioId)
+      .collection("recebimentos")
+      .where("consulta_id", "==", id)
+      .get();
+
+    const batch = firestore.batch();
+    let deleteFinancesCount = 0;
+
+    recebimentosQuery.docs.forEach(doc => {
+      const recData = doc.data();
+      if (recData.status === "pendente" || recData.status === "atrasado") {
+        batch.delete(doc.ref);
+        deleteFinancesCount++;
+      }
+    });
+
+    if (deleteFinancesCount > 0) {
+      console.log(`💰 Removendo ${deleteFinancesCount} lançamento(s) financeiro(s) pendente(s)/atrasado(s) vinculado(s) à consulta deletada.`);
+    }
+
+    // 4. Deletar a consulta do Firestore
+    batch.delete(consultaRef);
+    await batch.commit();
+
+    console.log(`✅ Consulta com ID ${id} excluída permanentemente do Firestore.`);
+    return NextResponse.json({ success: true });
+
+  } catch (error: any) {
+    console.error("🚨 Erro na API de exclusão de consulta:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Erro interno do servidor ao excluir agendamento." },
+      { status: 500 }
+    );
+  }
+}
+
